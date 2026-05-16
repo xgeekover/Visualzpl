@@ -1,0 +1,46 @@
+# ── macOS ────────────────────────────────────────────────────────────────
+.DS_Store
+._*
+
+# ── IDEs ─────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# ── Node / Vite (frontend) ───────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# ── Java / Gradle (backend) ──────────────────────────────────────────────
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+backend/!gradle/wrapper/gradle-wrapper.jar
+
+# ── Logback rolling log output ───────────────────────────────────────────
+logs/
+*.log
+
+# ── jpackage / Windows packaging staging ─────────────────────────────────
+dist-stage/
+out/
+
+# ── Static assets copied in by build-windows.bat ─────────────────────────
+backend/src/main/resources/static/
+
+# ── Secrets / env ────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── OS / archive misc ────────────────────────────────────────────────────
+*.zip
+*.tar
+*.tar.gz

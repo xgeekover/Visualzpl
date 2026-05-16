@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: visualzpl-backend
+  # spring-boot-starter-web and webflux are both on the classpath; force the
+  # runtime to Servlet (Tomcat) so the @RestController stays in Spring MVC.
+  main:
+    web-application-type: SERVLET
+  # Allow in-flight requests up to 30s to complete after a stop signal,
+  # which is required for clean Windows Service shutdown.
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  port: 8080
+  # Embedded Tomcat stops accepting new connections immediately and finishes
+  # in-flight requests within `spring.lifecycle.timeout-per-shutdown-phase`.
+  shutdown: graceful
+
+labelary:
+  # Upstream label rendering API. HTTPS is also available in production.
+  base-url: http://api.labelary.com
+  # WebClient response timeout for /available, /default and /write.
+  timeout-seconds: 10
+  # Maximum single PNG response size (default WebClient cap is 256KB).
+  max-response-bytes: 5242880
+
+# ──────────────────────────────────────────────────────────────────────────
+# Logging is configured exclusively by `classpath:logback-spring.xml`.
+# Override the io.visualzpl.* logger threshold at runtime by setting:
+#   -Dvisualzpl.log.level=DEBUG
+# Override the log directory (e.g. for a Windows Service install location):
+#   -Dvisualzpl.log.dir=C:/ProgramData/VisualZPL/logs
+# Both properties are bridged into Logback through <springProperty>.
+# ──────────────────────────────────────────────────────────────────────────
+visualzpl:
+  log:
+    level: INFO
+
+# ──────────────────────────────────────────────────────────────────────────
+# Spring Boot Actuator — lightweight operational monitoring.
+#
+# Exposed endpoints:
+#   GET /actuator/health   — aggregate liveness + per-component details
+#                            (built-in diskSpace + custom labelary probe)
+#   GET /actuator/metrics  — JVM, HTTP, WebClient micrometer counters
+#   GET /actuator/info     — build/info metadata (empty until populated)
+#
+# In production the management endpoints move to a localhost-only port
+# (see application-prod.yml) so they are not reachable from outside the
+# host.
+# ──────────────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+  health:
+    diskspace:
+      enabled: true
+      # Watch the directory where Logback rotates the production logs so
+      # the health endpoint goes DOWN before the log volume fills up.
+      path: ${visualzpl.log.dir:${user.dir}/logs}
+      threshold: 100MB

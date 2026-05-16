@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  VisualZPL — Production Logging Configuration
+
+  Activated automatically by Spring Boot because the file lives at
+  src/main/resources/logback-spring.xml. The `-spring.xml` suffix lets us
+  use <springProfile> / <springProperty> elements that bridge to the
+  application.yml configuration.
+
+  Operational notes:
+    * The log directory defaults to ${user.dir}/logs so the JVM only needs
+      write access to its own working directory. This is the most reliable
+      assumption under a Windows Service wrapper (NSSM / WinSW / Procrun),
+      which usually sets the working directory to the install folder.
+    * Override the location at install-time:
+        java -Dvisualzpl.log.dir=C:/ProgramData/VisualZPL/logs -jar visualzpl.jar
+    * Override the verbosity of the io.visualzpl.* loggers at runtime:
+        java -Dvisualzpl.log.level=DEBUG -jar visualzpl.jar
+-->
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <!-- ── Spring property bridges (resolved from application.yml) ── -->
+    <springProperty scope="context" name="appName"
+                    source="spring.application.name"
+                    defaultValue="visualzpl-backend"/>
+    <springProperty scope="context" name="logDir"
+                    source="visualzpl.log.dir"
+                    defaultValue="${user.dir}/logs"/>
+    <springProperty scope="context" name="coreLogLevel"
+                    source="visualzpl.log.level"
+                    defaultValue="INFO"/>
+
+    <!--
+      Shared pattern layout.
+      Format: [Timestamp] [Thread] [Log-Level] [Logger-Name] - Message
+      Stack traces for WARN/ERROR are appended automatically by Logback
+      whenever a Throwable accompanies the log event.
+    -->
+    <property name="LOG_PATTERN"
+              value="[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%thread] [%-5level] [%logger{36}] - %msg%n"/>
+
+    <!-- ─── Console appender (interactive use only) ─── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ─── Rolling file appender (mandatory for production) ─── -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${logDir}/visualzpl.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!--
+              Rotation strategy:
+                - One archive folder under the log directory.
+                - File name encodes the date (%d) and a per-day index (%i)
+                  for files that grow past maxFileSize within a single day.
+                - .gz compression keeps long-term disk use low.
+            -->
+            <fileNamePattern>${logDir}/archive/visualzpl-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!--
+      ─── Profile-driven routing ───
+      * !prod (dev, default, test): Console + File. The io.visualzpl.*
+        package is set to DEBUG so newly written features are easy to trace.
+      * prod: File only — Windows Services have no usable stdout. The
+        io.visualzpl.* level is driven by the `visualzpl.log.level` property
+        so on-call engineers can flip to DEBUG without redeploying.
+    -->
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+        <logger name="io.visualzpl" level="DEBUG"/>
+    </springProfile>
+
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="FILE"/>
+        </root>
+        <logger name="io.visualzpl" level="${coreLogLevel}"/>
+    </springProfile>
+
+    <!-- ─── Always-on framework levels (keep noisy libraries muted) ─── -->
+    <logger name="org.springframework.web" level="INFO"/>
+    <logger name="reactor.netty.http.client" level="INFO"/>
+    <logger name="io.netty" level="WARN"/>
+
+    <!--
+      Registers a JVM shutdown hook so the file appender's buffers are
+      flushed when the Windows Service Manager stops the JVM. Spring Boot
+      also closes the LoggerContext as part of context shutdown; this
+      double-safety guarantees flush under any signal path.
+    -->
+    <shutdownHook class="ch.qos.logback.core.hook.DefaultShutdownHook"/>
+</configuration>

@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'io.visualzpl'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring MVC (Tomcat) — REST controllers + servlet runtime.
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // WebFlux is on the classpath only for WebClient; runtime is forced to
+    // Servlet by `spring.main.web-application-type: SERVLET`.
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // @Valid bean validation for request DTOs.
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Production health, metrics and info endpoints under /actuator/*.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+    // WireMock spins up a real HTTP server on a random port so the
+    // LabelPreviewService integration test exercises the WebClient
+    // end-to-end without depending on the public Labelary API.
+    testImplementation 'org.wiremock:wiremock-standalone:3.10.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

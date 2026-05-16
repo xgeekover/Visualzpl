@@ -1,0 +1,42 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Profile: prod
+#
+# Activate with one of:
+#   java -Dspring.profiles.active=prod -jar visualzpl.jar
+#   SPRING_PROFILES_ACTIVE=prod (env var)
+#
+# Operational target: Windows Service host (NSSM / WinSW / Procrun).
+# Logback routes to the file appender only — see logback-spring.xml.
+# ──────────────────────────────────────────────────────────────────────────
+
+server:
+  # Required for graceful shutdown when the Windows Service Manager stops
+  # the JVM via CTRL+C / SIGTERM.
+  shutdown: graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+visualzpl:
+  log:
+    # Override to DEBUG temporarily when troubleshooting label rendering
+    # or upstream proxy behavior.
+    level: INFO
+    # `${user.dir}/logs` (the working directory) is the default and works
+    # for most service installs. Override to a guaranteed-writable path on
+    # locked-down hosts:
+    #   dir: C:/ProgramData/VisualZPL/logs
+
+# ──────────────────────────────────────────────────────────────────────────
+# Actuator hardening for production:
+#   - Move management endpoints to a separate port (8081) bound to
+#     127.0.0.1 so only local processes (operator SSH tunnel, local agent,
+#     or a sidecar Prometheus scraper) can reach them.
+#   - The public application port (8080) continues to serve only the
+#     /api/* endpoints — no /actuator/* leaks to external clients.
+# ──────────────────────────────────────────────────────────────────────────
+management:
+  server:
+    port: 8081
+    address: 127.0.0.1
