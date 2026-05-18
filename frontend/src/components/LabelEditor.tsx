@@ -965,8 +965,6 @@ export function LabelEditor() {
         return !o.encoded || o.encoded.key !== currentKey;
       },
     );
-    if (stale.length === 0) return;
-
     let cancelled = false;
 
     for (const obj of stale) {
@@ -1023,6 +1021,81 @@ export function LabelEditor() {
           // eslint-disable-next-line no-console
           console.warn('Image encoding failed:', err);
         });
+    }
+
+    // Encode any table cells whose imageSourceDataUrl is set but whose
+    // imageEncoded is missing or stale (based on the current cell box).
+    for (const obj of doc.objects) {
+      if (obj.type !== 'table') continue;
+      const tableObj = obj as TableObject;
+      for (const cell of tableObj.cells) {
+        if (!cell.imageSourceDataUrl) continue;
+        // Compute the cell's current outer rect to size the bitmap.
+        const colXs: number[] = [0];
+        for (const w of tableObj.colWidthsMm) colXs.push(colXs[colXs.length - 1] + w);
+        const rowYs: number[] = [0];
+        for (const h of tableObj.rowHeightsMm) rowYs.push(rowYs[rowYs.length - 1] + h);
+        const merge = tableObj.merges.find(
+          m =>
+            cell.row >= m.row &&
+            cell.row < m.row + m.rowSpan &&
+            cell.col >= m.col &&
+            cell.col < m.col + m.colSpan,
+        );
+        const topLeftRow = merge ? merge.row : cell.row;
+        const topLeftCol = merge ? merge.col : cell.col;
+        if (cell.row !== topLeftRow || cell.col !== topLeftCol) continue;
+        const rs = merge ? merge.rowSpan : 1;
+        const cs = merge ? merge.colSpan : 1;
+        let cellWMm = 0;
+        for (let i = 0; i < cs; i++) cellWMm += tableObj.colWidthsMm[topLeftCol + i] ?? 0;
+        let cellHMm = 0;
+        for (let i = 0; i < rs; i++) cellHMm += tableObj.rowHeightsMm[topLeftRow + i] ?? 0;
+        const padMm = cell.paddingMm ?? 1;
+        const innerWMm = Math.max(1, cellWMm - 2 * padMm);
+        const innerHMm = Math.max(1, cellHMm - 2 * padMm);
+        const targetKey = computeEncodingKey({
+          sourceDataUrl: cell.imageSourceDataUrl,
+          widthMm: innerWMm,
+          heightMm: innerHMm,
+          threshold: 128,
+          dpmm,
+        });
+        if (cell.imageEncoded && cell.imageEncoded.key === targetKey) continue;
+        const widthDots = Math.max(1, Math.round(innerWMm * dpmm));
+        const heightDots = Math.max(1, Math.round(innerHMm * dpmm));
+        void imageToZpl(cell.imageSourceDataUrl, { widthDots, heightDots, threshold: 128 })
+          .then(result => {
+            if (cancelled) return;
+            setDoc(d => ({
+              ...d,
+              objects: d.objects.map(o => {
+                if (o.id !== obj.id || o.type !== 'table') return o;
+                return {
+                  ...o,
+                  cells: (o as TableObject).cells.map(c => {
+                    if (c.row !== cell.row || c.col !== cell.col) return c;
+                    return {
+                      ...c,
+                      imageEncoded: {
+                        key: targetKey,
+                        hexData: result.hexData,
+                        bytesPerRow: result.bytesPerRow,
+                        totalBytes: result.totalBytes,
+                        widthDots: result.widthDots,
+                        heightDots: result.heightDots,
+                      },
+                    };
+                  }),
+                };
+              }),
+            }));
+          })
+          .catch(err => {
+            // eslint-disable-next-line no-console
+            console.warn('Cell image encoding failed:', err);
+          });
+      }
     }
 
     return () => {
