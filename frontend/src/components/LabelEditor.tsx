@@ -664,8 +664,14 @@ function ChevronDownIcon({ size = 12 }: { size?: number }) {
 // ──────────────────────────────────────────────────────────────────────────
 
 export function LabelEditor() {
+  type CellSelection =
+    | { kind: 'none' }
+    | { kind: 'single'; row: number; col: number }
+    | { kind: 'range'; startRow: number; startCol: number; endRow: number; endCol: number };
+
   const [doc, setDoc] = useState<LabelDocument>(INITIAL_DOC);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [cellSelection, setCellSelection] = useState<CellSelection>({ kind: 'none' });
 
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<fabric.Canvas | null>(null);
@@ -675,6 +681,10 @@ export function LabelEditor() {
   /** Mirror of `selectedId` for use inside imperative fabric callbacks. */
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+
+  useEffect(() => {
+    setCellSelection({ kind: 'none' });
+  }, [selectedId]);
 
   // Bottom panel layout — persisted across sessions in localStorage.
   const BOTTOM_PANEL_STORAGE_KEY = 'visualzpl.bottomPanel';
