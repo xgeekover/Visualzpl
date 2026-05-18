@@ -61,6 +61,7 @@ import {
   TextField,
 } from './formFields';
 import { NewTableModal } from './table/NewTableModal';
+import { createTableNode } from './table/tableNode';
 import type { TableObject } from '../types';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -368,9 +369,7 @@ function createFabricNode(obj: LabelObject): LabelNode {
         'Image nodes are async — use createImageNode() instead',
       );
     case 'table':
-      throw new Error(
-        'Table nodes are not yet supported in the canvas editor',
-      );
+      return createTableNode(obj) as LabelNode;
   }
 }
 
@@ -424,6 +423,15 @@ function shouldRecreate(prev: LabelObject, next: LabelObject): boolean {
     // Only recreate when the actual source image changes — size changes are
     // applied in place by adjusting fabric scaleX/scaleY.
     return prev.sourceDataUrl !== next.sourceDataUrl;
+  }
+  if (prev.type === 'table' && next.type === 'table') {
+    return (
+      JSON.stringify(prev.rowHeightsMm) !== JSON.stringify(next.rowHeightsMm) ||
+      JSON.stringify(prev.colWidthsMm) !== JSON.stringify(next.colWidthsMm) ||
+      JSON.stringify(prev.cells) !== JSON.stringify(next.cells) ||
+      JSON.stringify(prev.merges) !== JSON.stringify(next.merges) ||
+      prev.borderDots !== next.borderDots
+    );
   }
   return false;
 }
