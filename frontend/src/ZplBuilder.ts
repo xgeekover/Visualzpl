@@ -20,14 +20,21 @@
 
 import {
   BarcodeObject,
+  CELL_DEFAULTS,
   DEFAULT_DPMM,
   ImageObject,
   LabelDocument,
   LabelObject,
   LabelUnit,
   QrCodeObject,
+  TableObject,
   TextObject,
 } from './types';
+import {
+  buildOffsets,
+  findContainingMerge,
+  resolveCellRect,
+} from './components/table/tableGeometry';
 
 export class ZplBuilder {
   private readonly dpmm: number;
@@ -86,7 +93,7 @@ export class ZplBuilder {
       case 'image':
         return this.renderImage(obj);
       case 'table':
-        return '';
+        return this.renderTable(obj);
     }
   }
 
@@ -213,6 +220,142 @@ export class ZplBuilder {
     ].join('');
   }
 
+  /**
+   * Render a TableObject as one block of ZPL:
+   *   - outer ^GB box (if borderDots > 0)
+   *   - inner horizontal/vertical grid segments, skipping merge interiors
+   *   - per-cell content (^A0+^FB+^FD for text, ^GFA for image)
+   *
+   * Table-level rotation is baked into each cell's (x, y) so per-cell
+   * ^A0 commands keep their N orientation and per-cell fontRotation
+   * composes naturally on top.
+   */
+  private renderTable(table: TableObject): string {
+    const ox = this.toDot(table.x);
+    const oy = this.toDot(table.y);
+    const colXs = buildOffsets(table.colWidthsMm); // mm offsets, length = cols+1
+    const rowYs = buildOffsets(table.rowHeightsMm); // mm offsets, length = rows+1
+    const totalWDots = this.mmToDot(colXs[colXs.length - 1]);
+    const totalHDots = this.mmToDot(rowYs[rowYs.length - 1]);
+
+    const out: string[] = [];
+
+    // 1) Outer box + inner grid lines
+    if (table.borderDots > 0) {
+      out.push(
+        `^FO${ox},${oy}^GB${totalWDots},${totalHDots},${table.borderDots},B,0^FS`,
+      );
+
+      // Horizontal interior lines
+      for (let r = 1; r < table.rowHeightsMm.length; r++) {
+        const yMm = rowYs[r];
+        const yDot = oy + this.mmToDot(yMm);
+        let segStartCol = 0;
+        while (segStartCol < table.colWidthsMm.length) {
+          let segEndCol = segStartCol;
+          while (segEndCol < table.colWidthsMm.length) {
+            const swallowedAbove = findContainingMerge(r - 1, segEndCol, table.merges);
+            const swallowedBelow = findContainingMerge(r, segEndCol, table.merges);
+            const swallowed =
+              !!swallowedAbove &&
+              swallowedAbove === swallowedBelow;
+            if (swallowed) break;
+            segEndCol++;
+          }
+          if (segEndCol > segStartCol) {
+            const xStartDot = ox + this.mmToDot(colXs[segStartCol]);
+            const widthDot =
+              this.mmToDot(colXs[segEndCol]) - this.mmToDot(colXs[segStartCol]);
+            out.push(
+              `^FO${xStartDot},${yDot}^GB${widthDot},${table.borderDots},${table.borderDots},B,0^FS`,
+            );
+          }
+          if (segEndCol < table.colWidthsMm.length) {
+            const m = findContainingMerge(r - 1, segEndCol, table.merges)!;
+            segStartCol = m.col + m.colSpan;
+          } else {
+            segStartCol = segEndCol;
+          }
+        }
+      }
+
+      // Vertical interior lines
+      for (let c = 1; c < table.colWidthsMm.length; c++) {
+        const xMm = colXs[c];
+        const xDot = ox + this.mmToDot(xMm);
+        let segStartRow = 0;
+        while (segStartRow < table.rowHeightsMm.length) {
+          let segEndRow = segStartRow;
+          while (segEndRow < table.rowHeightsMm.length) {
+            const left = findContainingMerge(segEndRow, c - 1, table.merges);
+            const right = findContainingMerge(segEndRow, c, table.merges);
+            const swallowed = !!left && left === right;
+            if (swallowed) break;
+            segEndRow++;
+          }
+          if (segEndRow > segStartRow) {
+            const yStartDot = oy + this.mmToDot(rowYs[segStartRow]);
+            const heightDot =
+              this.mmToDot(rowYs[segEndRow]) - this.mmToDot(rowYs[segStartRow]);
+            out.push(
+              `^FO${xDot},${yStartDot}^GB${table.borderDots},${heightDot},${table.borderDots},B,0^FS`,
+            );
+          }
+          if (segEndRow < table.rowHeightsMm.length) {
+            const m = findContainingMerge(segEndRow, c - 1, table.merges)!;
+            segStartRow = m.row + m.rowSpan;
+          } else {
+            segStartRow = segEndRow;
+          }
+        }
+      }
+    }
+
+    // 2) Cell content
+    for (const cell of table.cells) {
+      const rect = resolveCellRect(
+        cell.row,
+        cell.col,
+        table.rowHeightsMm,
+        table.colWidthsMm,
+        table.merges,
+      );
+      if (rect.row !== cell.row || rect.col !== cell.col) continue;
+
+      const padMm = cell.paddingMm ?? CELL_DEFAULTS.paddingMm;
+      const innerXDot = ox + this.mmToDot(rect.x + padMm);
+      const innerYDot = oy + this.mmToDot(rect.y + padMm);
+      const innerWDot = this.mmToDot(rect.w - 2 * padMm);
+      const innerHDot = this.mmToDot(rect.h - 2 * padMm);
+      if (innerWDot <= 0 || innerHDot <= 0) continue;
+
+      if (cell.imageSourceDataUrl) {
+        if (!cell.imageEncoded) continue;
+        const { hexData, bytesPerRow, totalBytes } = cell.imageEncoded;
+        out.push(
+          `^FO${innerXDot},${innerYDot}^GFA,${totalBytes},${totalBytes},${bytesPerRow},${hexData}^FS`,
+        );
+      } else if (cell.text !== undefined) {
+        const fontHeightMm = cell.fontHeightMm ?? CELL_DEFAULTS.fontHeightMm;
+        const heightDot = this.mmToDot(fontHeightMm);
+        const align = cell.align ?? CELL_DEFAULTS.align;
+        const alignFlag = align === 'center' ? 'C' : align === 'right' ? 'R' : 'L';
+        const maxLines = Math.min(9999, Math.max(1, Math.floor(innerHDot / Math.max(1, heightDot))));
+        const fontRotation = cell.fontRotation ?? CELL_DEFAULTS.fontRotation;
+        out.push(
+          [
+            `^FO${innerXDot},${innerYDot}`,
+            `^A0${fontRotation},${heightDot},0`,
+            `^FB${innerWDot},${maxLines},0,${alignFlag},0`,
+            `^FD${this.escapeFieldData(cell.text)}^FS`,
+          ].join(''),
+        );
+      }
+    }
+
+    return out.join('\n');
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // 유틸
   // ──────────────────────────────────────────────────────────────────────────
@@ -232,9 +375,10 @@ export class ZplBuilder {
 
   /**
    * ZPL 의 제어 문자(^ ~)가 ^FD 데이터에 들어가면 파서가 명령으로 오인한다.
-   * 안전을 위해 공백으로 치환. (필요 시 ^FH 헥사 이스케이프로 확장 가능)
+   * ^ 는 ZPL 명령 접두어이므로 공백 2개로, ~ 는 공백 1개로 치환한다.
+   * (필요 시 ^FH 헥사 이스케이프로 확장 가능)
    */
   private escapeFieldData(text: string): string {
-    return text.replace(/[\^~]/g, ' ');
+    return text.replace(/\^/g, '  ').replace(/~/g, ' ');
   }
 }
