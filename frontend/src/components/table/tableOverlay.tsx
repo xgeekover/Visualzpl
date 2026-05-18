@@ -135,7 +135,16 @@ export function TableOverlay({ table, selection, onSelectionChange, onRowResize,
   useEffect(() => {
     const onDocPointerDown = (e: PointerEvent) => {
       if (!rootRef.current) return;
-      if (rootRef.current.contains(e.target as Node)) return;
+      const target = e.target as Node | null;
+      if (!target) return;
+      // Inside the overlay → don't clear (the overlay handles its own selection).
+      if (rootRef.current.contains(target)) return;
+      // Inside the right property panel or any modal → don't clear; the
+      // panel's buttons (Merge/Unmerge/Delete/etc.) need a stable selection
+      // to operate on. Same for the cell file picker that lives in CellPropertyForm.
+      const targetEl = target instanceof Element ? target : (target as Node).parentElement;
+      if (targetEl?.closest('aside')) return;
+      if (targetEl?.closest('[role="dialog"]')) return;
       onSelectionChange({ kind: 'none' });
     };
     document.addEventListener('pointerdown', onDocPointerDown);
