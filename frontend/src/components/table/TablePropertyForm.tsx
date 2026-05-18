@@ -1,5 +1,5 @@
-import type { TableObject, ZplRotation } from '../../types';
-import { NumberField, SelectField, ReadOnlyField } from '../formFields';
+import type { TableObject } from '../../types';
+import { NumberField, ReadOnlyField } from '../formFields';
 
 interface Props {
   table: TableObject;
@@ -50,17 +50,11 @@ export function TablePropertyForm({ table, onChange, onDelete }: Props) {
         <NumberField label="Y (mm)" value={table.y} step={0.5}
           onChange={v => onChange({ y: v })} />
       </div>
-      <SelectField
-        label="Rotation"
-        value={table.rotation ?? 'N'}
-        onChange={v => onChange({ rotation: v as ZplRotation })}
-        options={[
-          { value: 'N', label: '0°' },
-          { value: 'R', label: '90°' },
-          { value: 'I', label: '180°' },
-          { value: 'B', label: '270°' },
-        ]}
-      />
+      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+        Table rotation is not yet supported in the printed output. Rotate
+        the printer media or split into individual text/barcode objects if
+        you need rotated content.
+      </div>
       <NumberField
         label="Border (dot)"
         value={table.borderDots}

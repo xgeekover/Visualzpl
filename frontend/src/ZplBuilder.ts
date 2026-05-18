@@ -226,9 +226,12 @@ export class ZplBuilder {
    *   - inner horizontal/vertical grid segments, skipping merge interiors
    *   - per-cell content (^A0+^FB+^FD for text, ^GFA for image)
    *
-   * Table-level rotation is baked into each cell's (x, y) so per-cell
-   * ^A0 commands keep their N orientation and per-cell fontRotation
-   * composes naturally on top.
+   *
+   * NOTE: Table-level rotation (table.rotation) is currently ignored on output.
+   * The Fabric canvas applies the rotation visually but the ZPL stream emits
+   * cells in their unrotated positions. Property-form rotation control was
+   * removed pending a proper geometry pre-rotation pass. Per-cell `fontRotation`
+   * still works and is emitted on each cell's ^A0 command.
    */
   private renderTable(table: TableObject): string {
     const ox = this.toDot(table.x);
