@@ -375,10 +375,9 @@ export class ZplBuilder {
 
   /**
    * ZPL 의 제어 문자(^ ~)가 ^FD 데이터에 들어가면 파서가 명령으로 오인한다.
-   * ^ 는 ZPL 명령 접두어이므로 공백 2개로, ~ 는 공백 1개로 치환한다.
-   * (필요 시 ^FH 헥사 이스케이프로 확장 가능)
+   * 안전을 위해 공백 1칸으로 치환. (필요 시 ^FH 헥사 이스케이프로 확장 가능)
    */
   private escapeFieldData(text: string): string {
-    return text.replace(/\^/g, '  ').replace(/~/g, ' ');
+    return text.replace(/[\^~]/g, ' ');
   }
 }

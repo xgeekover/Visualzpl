@@ -80,7 +80,7 @@ describe('ZplBuilder — table', () => {
       ),
     ).build();
     expect(zpl).not.toContain('^FS~CC^FS');
-    expect(zpl).toContain('^FD  FS CC^FS');
+    expect(zpl).toContain('^FD FS CC^FS');
   });
 
   it('skips internal grid segments inside a merged region', () => {
