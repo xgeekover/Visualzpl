@@ -17,6 +17,14 @@ frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/pnpm-debug.log*
 
+# Stray TS compile output — Vite handles transpilation; tsc is only used
+# for type-checking. Never commit .js/.d.ts/.js.map next to the .ts sources.
+frontend/src/**/*.js
+frontend/src/**/*.js.map
+frontend/src/**/*.d.ts
+!frontend/src/vite-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
 # ── Java / Gradle (backend) ──────────────────────────────────────────────
 backend/.gradle/
 backend/build/
