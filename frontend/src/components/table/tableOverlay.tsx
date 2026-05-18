@@ -19,16 +19,56 @@ interface Props {
   table: TableObject;
   selection: CellSelection;
   onSelectionChange: (s: CellSelection) => void;
+  onRowResize?: (rowIndex: number, newHeightMm: number) => void;
+  onColResize?: (colIndex: number, newWidthMm: number) => void;
 }
 
 /**
  * HTML overlay rendered over the Fabric canvas, aligned to the table's
- * position. Hosts cell click + Shift+drag range selection. Resize handles
- * are added in Phase 6.
+ * position. Hosts cell click + Shift+drag range selection, and row/column
+ * resize handles.
  */
-export function TableOverlay({ table, selection, onSelectionChange }: Props) {
+export function TableOverlay({ table, selection, onSelectionChange, onRowResize, onColResize }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [dragStart, setDragStart] = useState<{ row: number; col: number } | null>(null);
+
+  const [resizing, setResizing] = useState<
+    | { axis: 'row'; index: number; startClientY: number; startSizeMm: number }
+    | { axis: 'col'; index: number; startClientX: number; startSizeMm: number }
+    | null
+  >(null);
+
+  const onHandleDown = (
+    axis: 'row' | 'col',
+    index: number,
+  ) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    setResizing(
+      axis === 'row'
+        ? { axis, index, startClientY: e.clientY, startSizeMm: table.rowHeightsMm[index] }
+        : { axis, index, startClientX: e.clientX, startSizeMm: table.colWidthsMm[index] },
+    );
+  };
+
+  const onHandleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizing) return;
+    if (resizing.axis === 'row') {
+      const deltaMm = (e.clientY - resizing.startClientY) / PX_PER_MM;
+      const next = Math.max(5, resizing.startSizeMm + deltaMm);
+      onRowResize?.(resizing.index, next);
+    } else {
+      const deltaMm = (e.clientX - resizing.startClientX) / PX_PER_MM;
+      const next = Math.max(5, resizing.startSizeMm + deltaMm);
+      onColResize?.(resizing.index, next);
+    }
+  };
+
+  const onHandleUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    setResizing(null);
+    try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
 
   const colXs = buildOffsets(table.colWidthsMm);
   const rowYs = buildOffsets(table.rowHeightsMm);
@@ -143,6 +183,46 @@ export function TableOverlay({ table, selection, onSelectionChange }: Props) {
             background: 'rgba(59, 130, 246, 0.18)',
             border: '2px solid rgb(59, 130, 246)',
             pointerEvents: 'none',
+          }}
+        />
+      ))}
+
+      {/* Row resize handles (between row i and i+1) */}
+      {table.rowHeightsMm.map((_, i) => (
+        <div
+          key={`rh-${i}`}
+          onPointerDown={onHandleDown('row', i)}
+          onPointerMove={onHandleMove}
+          onPointerUp={onHandleUp}
+          onPointerCancel={onHandleUp}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: rowYs[i + 1] * PX_PER_MM - 4,
+            width: widthPx,
+            height: 8,
+            cursor: 'row-resize',
+            touchAction: 'none',
+          }}
+        />
+      ))}
+
+      {/* Column resize handles (between col i and i+1) */}
+      {table.colWidthsMm.map((_, i) => (
+        <div
+          key={`ch-${i}`}
+          onPointerDown={onHandleDown('col', i)}
+          onPointerMove={onHandleMove}
+          onPointerUp={onHandleUp}
+          onPointerCancel={onHandleUp}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: colXs[i + 1] * PX_PER_MM - 4,
+            width: 8,
+            height: heightPx,
+            cursor: 'col-resize',
+            touchAction: 'none',
           }}
         />
       ))}
