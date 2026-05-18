@@ -62,6 +62,7 @@ import {
 } from './formFields';
 import { NewTableModal } from './table/NewTableModal';
 import { createTableNode } from './table/tableNode';
+import { TableOverlay, type CellSelection } from './table/tableOverlay';
 import type { TableObject } from '../types';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -664,11 +665,6 @@ function ChevronDownIcon({ size = 12 }: { size?: number }) {
 // ──────────────────────────────────────────────────────────────────────────
 
 export function LabelEditor() {
-  type CellSelection =
-    | { kind: 'none' }
-    | { kind: 'single'; row: number; col: number }
-    | { kind: 'range'; startRow: number; startCol: number; endRow: number; endCol: number };
-
   const [doc, setDoc] = useState<LabelDocument>(INITIAL_DOC);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cellSelection, setCellSelection] = useState<CellSelection>({ kind: 'none' });
@@ -1384,8 +1380,15 @@ export function LabelEditor() {
 
         {/* ── Center canvas ────────────────────────────────── */}
         <main className="flex-1 flex items-center justify-center bg-slate-200 overflow-auto p-8">
-          <div className="bg-white shadow-xl ring-1 ring-slate-300">
+          <div className="relative bg-white shadow-xl ring-1 ring-slate-300">
             <canvas ref={canvasElRef} />
+            {selected?.type === 'table' && (
+              <TableOverlay
+                table={selected}
+                selection={cellSelection}
+                onSelectionChange={setCellSelection}
+              />
+            )}
           </div>
         </main>
 
