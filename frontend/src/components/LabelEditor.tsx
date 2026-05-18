@@ -52,6 +52,8 @@ import { useLabelPreview } from '../hooks/useLabelPreview';
 import { useBrowserPrint } from '../hooks/useBrowserPrint';
 import { useToastQueue, type Toast } from '../hooks/useToastQueue';
 import { BatchDataModal } from './BatchDataModal';
+import { ResizableBottomPanel } from './ResizableBottomPanel';
+import { readJson, writeJson } from '../storage';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -648,6 +650,22 @@ export function LabelEditor() {
   /** Mirror of `selectedId` for use inside imperative fabric callbacks. */
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+
+  // Bottom panel layout — persisted across sessions in localStorage.
+  const BOTTOM_PANEL_STORAGE_KEY = 'visualzpl.bottomPanel';
+  type BottomPanelStored = { height: number; collapsed: boolean };
+  const [bottomHeight, setBottomHeight] = useState<number>(
+    () => readJson<BottomPanelStored>(BOTTOM_PANEL_STORAGE_KEY)?.height ?? 240,
+  );
+  const [bottomCollapsed, setBottomCollapsed] = useState<boolean>(
+    () => readJson<BottomPanelStored>(BOTTOM_PANEL_STORAGE_KEY)?.collapsed ?? false,
+  );
+  useEffect(() => {
+    writeJson<BottomPanelStored>(BOTTOM_PANEL_STORAGE_KEY, {
+      height: bottomHeight,
+      collapsed: bottomCollapsed,
+    });
+  }, [bottomHeight, bottomCollapsed]);
 
   // Live ZPL string.
   const zplCode = useMemo(() => new ZplBuilder(doc).build(), [doc]);
@@ -1322,7 +1340,12 @@ export function LabelEditor() {
       </div>
 
       {/* ── Bottom: ZPL output (left) + Live Preview (right) ────────── */}
-      <section className="h-72 flex shrink-0 border-t border-slate-300">
+      <ResizableBottomPanel
+        height={bottomHeight}
+        onHeightChange={setBottomHeight}
+        collapsed={bottomCollapsed}
+        onToggleCollapse={() => setBottomCollapsed(c => !c)}
+      >
         <div className="w-1/2 bg-slate-900 text-slate-100 flex flex-col border-r border-slate-700">
           <header className="px-4 py-2 border-b border-slate-700 flex items-center justify-between">
             <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
@@ -1350,7 +1373,7 @@ export function LabelEditor() {
             error={previewError}
           />
         </div>
-      </section>
+      </ResizableBottomPanel>
 
       {/* Always-mounted modal — toggled via `isOpen` so dataRows persist. */}
       <BatchDataModal
