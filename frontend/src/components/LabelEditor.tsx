@@ -60,6 +60,8 @@ import {
   SelectField,
   TextField,
 } from './formFields';
+import { NewTableModal } from './table/NewTableModal';
+import type { TableObject } from '../types';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -761,6 +763,7 @@ export function LabelEditor() {
 
   // ── Batch data modal (dynamic variable substitution) ───────────────
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isNewTableOpen, setIsNewTableOpen] = useState(false);
   // Lifted from BatchDataModal so presets can hydrate the rows in one shot.
   const [batchDataRows, setBatchDataRows] = useState<DataRow[]>([{}]);
   const detectedVariableCount = useMemo(
@@ -1074,6 +1077,32 @@ export function LabelEditor() {
     setSelectedId(id);
   };
 
+  // ── Table insertion modal ───────────────────────────────────────────
+  const handleAddTableClick = () => setIsNewTableOpen(true);
+
+  const handleConfirmNewTable = (rows: number, cols: number) => {
+    setIsNewTableOpen(false);
+    const labelW = doc.widthMm ?? 100;
+    const labelH = doc.heightMm ?? 50;
+    const colWidthMm = Math.max(5, (labelW * 0.5) / cols);
+    const rowHeightMm = Math.max(5, (labelH * 0.5) / rows);
+    const id = nextId('table');
+    const obj: TableObject = {
+      id,
+      type: 'table',
+      x: 5,
+      y: 5,
+      data: `Table ${rows}×${cols}`,
+      rowHeightsMm: Array.from({ length: rows }, () => rowHeightMm),
+      colWidthsMm: Array.from({ length: cols }, () => colWidthMm),
+      borderDots: 2,
+      cells: [],
+      merges: [],
+    };
+    setDoc(d => ({ ...d, objects: [...d.objects, obj] }));
+    setSelectedId(id);
+  };
+
   // ── Image upload: hidden <input> triggered from the toolbar button ──
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1292,6 +1321,11 @@ export function LabelEditor() {
             className="hidden"
             onChange={handleImageFileSelected}
           />
+          <ToolButton
+            onClick={handleAddTableClick}
+            icon={<TableIcon size={16} />}
+            label="Add Table"
+          />
 
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-1">
             Layers
@@ -1319,7 +1353,9 @@ export function LabelEditor() {
                         ? '‖'
                         : o.type === 'qrcode'
                           ? '▣'
-                          : 'I'}
+                          : o.type === 'image'
+                            ? 'I'
+                            : '▦'}
                   </span>
                   <span className="truncate">{o.id}</span>
                 </li>
@@ -1401,6 +1437,11 @@ export function LabelEditor() {
         canPrint={canPrint}
         isPrinting={printStatus === 'sending'}
         printDisabledReason={printButtonTooltip}
+      />
+      <NewTableModal
+        isOpen={isNewTableOpen}
+        onClose={() => setIsNewTableOpen(false)}
+        onConfirm={handleConfirmNewTable}
       />
     </div>
   );
