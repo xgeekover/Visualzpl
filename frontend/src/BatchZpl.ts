@@ -165,7 +165,7 @@ export function validateBatchData(
   // Step 1 — classify every variable by the object types that consume it.
   const consumersByVariable = new Map<string, Set<ConsumerType>>();
   for (const obj of doc.objects) {
-    if (obj.type === 'image') continue;
+    if (obj.type === 'image' || obj.type === 'table') continue;
     const pattern = new RegExp(VARIABLE_PATTERN.source, 'g');
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(obj.data)) !== null) {

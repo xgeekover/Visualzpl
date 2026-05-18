@@ -85,6 +85,8 @@ export class ZplBuilder {
         return this.renderQrCode(obj);
       case 'image':
         return this.renderImage(obj);
+      case 'table':
+        return '';
     }
   }
 

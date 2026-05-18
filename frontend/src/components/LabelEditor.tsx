@@ -132,6 +132,11 @@ function estimateObjectBoundsMm(
     }
     case 'image':
       return { width: obj.widthMm, height: obj.heightMm };
+    case 'table': {
+      const w = obj.colWidthsMm.reduce((a, b) => a + b, 0);
+      const h = obj.rowHeightsMm.reduce((a, b) => a + b, 0);
+      return { width: w, height: h };
+    }
   }
 }
 
@@ -353,6 +358,10 @@ function createFabricNode(obj: LabelObject): LabelNode {
     case 'image':
       throw new Error(
         'Image nodes are async — use createImageNode() instead',
+      );
+    case 'table':
+      throw new Error(
+        'Table nodes are not yet supported in the canvas editor',
       );
   }
 }

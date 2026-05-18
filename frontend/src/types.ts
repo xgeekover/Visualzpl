@@ -26,7 +26,7 @@ interface BaseLabelObject {
   /** 도면 내 고유 식별자 (편집기에서 사용) */
   id: string;
   /** 객체 타입 디스크리미네이터 */
-  type: 'text' | 'barcode' | 'qrcode' | 'image';
+  type: 'text' | 'barcode' | 'qrcode' | 'image' | 'table';
   /** 좌상단 X 좌표 (LabelDocument.unit 단위) */
   x: number;
   /** 좌상단 Y 좌표 (LabelDocument.unit 단위) */
@@ -108,12 +108,57 @@ export interface ImageObject extends BaseLabelObject {
   encoded?: ImageEncodedPayload;
 }
 
+/** A piece of content placed in one (possibly merged) cell.
+ *  (row, col) MUST equal the top-left of the cell or merge span. */
+export interface TableCellContent {
+  row: number;
+  col: number;
+  /** Exactly one of `text` / `imageSourceDataUrl` is set. */
+  text?: string;
+  imageSourceDataUrl?: string;
+  /** Lazy-populated ^GFA payload, fit to the cell box. */
+  imageEncoded?: ImageEncodedPayload;
+  /** Text presentation. Ignored when in image mode. */
+  fontHeightMm?: number;
+  fontRotation?: ZplRotation;
+  align?: 'left' | 'center' | 'right';
+  paddingMm?: number;
+}
+
+/** Rectangular merge region. rowSpan/colSpan ≥ 1. */
+export interface TableCellSpan {
+  row: number;
+  col: number;
+  rowSpan: number;
+  colSpan: number;
+}
+
+/** Default text presentation inside a cell when fields are unset. */
+export const CELL_DEFAULTS = {
+  fontHeightMm: 3,
+  fontRotation: 'N' as ZplRotation,
+  align: 'left' as 'left' | 'center' | 'right',
+  paddingMm: 1,
+} as const;
+
+/** Table object — exported as one ZPL block of ^GB lines + cell content. */
+export interface TableObject extends BaseLabelObject {
+  type: 'table';
+  rowHeightsMm: number[];
+  colWidthsMm: number[];
+  /** Border + grid line thickness in dots. 0 = no lines. Default 2. */
+  borderDots: number;
+  cells: TableCellContent[];
+  merges: TableCellSpan[];
+}
+
 /** 변환 엔진 입력의 객체 합타입 */
 export type LabelObject =
   | TextObject
   | BarcodeObject
   | QrCodeObject
-  | ImageObject;
+  | ImageObject
+  | TableObject;
 
 /** 한 장의 라벨 문서를 표현하는 최상위 타입 */
 export interface LabelDocument {
