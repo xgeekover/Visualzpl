@@ -45,6 +45,8 @@ export function CellPropertyForm({ table, row, col, onTableChange }: Props) {
       fontRotation: existing?.fontRotation ?? CELL_DEFAULTS.fontRotation,
       align: existing?.align ?? CELL_DEFAULTS.align,
       paddingMm: existing?.paddingMm ?? CELL_DEFAULTS.paddingMm,
+      imageSourceDataUrl: undefined,
+      imageEncoded: undefined,
     });
   };
 
