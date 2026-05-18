@@ -64,6 +64,9 @@ import { NewTableModal } from './table/NewTableModal';
 import { createTableNode } from './table/tableNode';
 import { TableOverlay, type CellSelection } from './table/tableOverlay';
 import type { TableObject } from '../types';
+import { TablePropertyForm } from './table/TablePropertyForm';
+import { CellPropertyForm } from './table/CellPropertyForm';
+import { RangeMergeForm } from './table/RangeMergeForm';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Constants & helpers
@@ -1398,11 +1401,37 @@ export function LabelEditor() {
             Properties
           </h2>
           {selected ? (
-            <PropertyForm
-              object={selected}
-              onChange={patch => updateObject(selected.id, patch)}
-              onDelete={() => deleteObject(selected.id)}
-            />
+            selected.type === 'table' ? (
+              cellSelection.kind === 'range' &&
+              (cellSelection.startRow !== cellSelection.endRow ||
+                cellSelection.startCol !== cellSelection.endCol) ? (
+                <RangeMergeForm
+                  table={selected}
+                  range={cellSelection}
+                  onTableChange={patch => updateObject(selected.id, patch)}
+                  onClearSelection={() => setCellSelection({ kind: 'none' })}
+                />
+              ) : cellSelection.kind === 'single' ? (
+                <CellPropertyForm
+                  table={selected}
+                  row={cellSelection.row}
+                  col={cellSelection.col}
+                  onTableChange={patch => updateObject(selected.id, patch)}
+                />
+              ) : (
+                <TablePropertyForm
+                  table={selected}
+                  onChange={patch => updateObject(selected.id, patch)}
+                  onDelete={() => deleteObject(selected.id)}
+                />
+              )
+            ) : (
+              <PropertyForm
+                object={selected}
+                onChange={patch => updateObject(selected.id, patch)}
+                onDelete={() => deleteObject(selected.id)}
+              />
+            )
           ) : (
             <p className="text-sm text-slate-400 italic">
               Select an object on the canvas.
