@@ -133,14 +133,32 @@ export function createTableNode(obj: TableObject): fabric.Group {
     }
   }
 
-  return new fabric.Group(children, {
+  const group = new fabric.Group(children, {
     left: obj.x * PX_PER_MM,
     top: obj.y * PX_PER_MM,
     angle: rotationToAngle(obj.rotation),
     originX: 'left',
     originY: 'top',
     subTargetCheck: false,
+    // A table is a structured object: its size is the sum of per-column /
+    // per-row mm values and each cell owns its font/padding. A single Fabric
+    // group scale can't be mapped back onto that structure without loss (fonts,
+    // padding, non-uniform stretch, preview↔commit drift), and ZPL output
+    // ignores table rotation entirely. So we forbid canvas scale/rotate and
+    // allow only MOVE — which round-trips faithfully through nodeToModelPatch
+    // (x/y) into ZPL. Precise resizing is done via the TableOverlay column/row
+    // border drag and the property form.
+    lockScalingX: true,
+    lockScalingY: true,
+    lockRotation: true,
   });
+  // Hide the size/rotation handles so the affordance reads as move-only.
+  group.setControlsVisibility({
+    tl: false, tr: false, bl: false, br: false, // corner scale handles
+    ml: false, mr: false, mt: false, mb: false, // edge scale handles
+    mtr: false, // rotation handle
+  });
+  return group;
 }
 
 /**
