@@ -701,8 +701,15 @@ export function LabelEditor() {
     });
   }, [bottomHeight, bottomCollapsed]);
 
-  // Live ZPL string.
-  const zplCode = useMemo(() => new ZplBuilder(doc).build(), [doc]);
+  // Live ZPL string. Generated from the canvas doc, UNLESS the user has
+  // manually edited / pasted raw ZPL into the code panel (`zplDraft` override).
+  // When a draft is present, the preview + copy/download/print all follow it,
+  // so external ZPL can be pasted, tweaked, and previewed without a full ZPL
+  // importer. `재생성으로 되돌리기` clears the draft back to the generated ZPL.
+  const generatedZpl = useMemo(() => new ZplBuilder(doc).build(), [doc]);
+  const [zplDraft, setZplDraft] = useState<string | null>(null);
+  const zplCode = zplDraft ?? generatedZpl;
+  const isManualZpl = zplDraft !== null;
 
   // Backend preview via debounced hook.
   const previewWidthMm = doc.widthMm ?? 100;
@@ -1533,23 +1540,48 @@ export function LabelEditor() {
         onToggleCollapse={() => setBottomCollapsed(c => !c)}
       >
         <div className="w-1/2 bg-slate-900 text-slate-100 flex flex-col border-r border-slate-700">
-          <header className="px-4 py-2 border-b border-slate-700 flex items-center justify-between">
-            <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
-              ZPL Code (Live)
+          <header className="px-4 py-2 border-b border-slate-700 flex items-center justify-between gap-2">
+            <span className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              ZPL Code
+              {isManualZpl ? (
+                <span className="normal-case tracking-normal text-amber-400">· 수동 편집됨</span>
+              ) : (
+                <span className="normal-case tracking-normal text-slate-500">(Live)</span>
+              )}
             </span>
-            <button
-              type="button"
-              onClick={handleCopyToClipboard}
-              title="Copy ZPL to clipboard"
-              className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
-            >
-              <ClipboardIcon size={12} />
-              Copy Code
-            </button>
+            <div className="flex items-center gap-1">
+              {isManualZpl && (
+                <button
+                  type="button"
+                  onClick={() => setZplDraft(null)}
+                  title="캔버스에서 생성된 ZPL 로 되돌리기 (수동 편집 내용은 사라집니다)"
+                  className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
+                >
+                  재생성으로 되돌리기
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleCopyToClipboard}
+                title="Copy ZPL to clipboard"
+                className="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                <ClipboardIcon size={12} />
+                Copy Code
+              </button>
+            </div>
           </header>
-          <pre className="flex-1 p-4 font-mono text-xs text-emerald-300 whitespace-pre overflow-auto">
-            {zplCode}
-          </pre>
+          {/* Editable: paste/edit raw ZPL → live preview follows the draft.
+              Typing switches this panel from generated (Live) to manual mode. */}
+          <textarea
+            value={zplCode}
+            onChange={e => setZplDraft(e.target.value)}
+            spellCheck={false}
+            wrap="off"
+            aria-label="ZPL code editor"
+            placeholder="여기에 외부 ZPL 을 붙여넣거나 직접 편집하면 오른쪽 미리보기에 바로 반영됩니다…"
+            className="flex-1 p-4 font-mono text-xs text-emerald-300 bg-slate-900 whitespace-pre overflow-auto resize-none outline-none border-0 placeholder:text-slate-600 focus:ring-1 focus:ring-inset focus:ring-emerald-500/40"
+          />
         </div>
 
         <div className="w-1/2 bg-white flex flex-col">
