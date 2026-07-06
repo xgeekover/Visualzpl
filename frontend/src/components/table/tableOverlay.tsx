@@ -21,16 +21,29 @@ interface Props {
   onSelectionChange: (s: CellSelection) => void;
   onRowResize?: (rowIndex: number, newHeightMm: number) => void;
   onColResize?: (colIndex: number, newWidthMm: number) => void;
+  /** Move the whole table to an absolute (x, y) in mm (drag-to-place). */
+  onMove?: (xMm: number, yMm: number) => void;
 }
+
+// Pointer travel (px) before a body drag becomes a MOVE rather than a click.
+const MOVE_THRESHOLD_PX = 3;
 
 /**
  * HTML overlay rendered over the Fabric canvas, aligned to the table's
  * position. Hosts cell click + Shift+drag range selection, and row/column
  * resize handles.
  */
-export function TableOverlay({ table, selection, onSelectionChange, onRowResize, onColResize }: Props) {
+export function TableOverlay({ table, selection, onSelectionChange, onRowResize, onColResize, onMove }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [dragStart, setDragStart] = useState<{ row: number; col: number } | null>(null);
+
+  // Body drag-to-move: on a no-shift press we defer the click-vs-move decision.
+  // A press that stays put selects the cell (on release); a press that travels
+  // past the threshold moves the whole table via onMove().
+  const moveRef = useRef<
+    | { clientX: number; clientY: number; startXMm: number; startYMm: number; cell: { row: number; col: number }; moved: boolean }
+    | null
+  >(null);
 
   const [resizing, setResizing] = useState<
     | { axis: 'row'; index: number; startClientY: number; startSizeMm: number }
@@ -97,6 +110,7 @@ export function TableOverlay({ table, selection, onSelectionChange, onRowResize,
     e.preventDefault();
     rootRef.current.setPointerCapture(e.pointerId);
     if (e.shiftKey) {
+      // Shift → range selection (unchanged).
       const baseRow = selection.kind === 'single' ? selection.row : (selection.kind === 'range' ? selection.startRow : point.row);
       const baseCol = selection.kind === 'single' ? selection.col : (selection.kind === 'range' ? selection.startCol : point.col);
       setDragStart({ row: baseRow, col: baseCol });
@@ -105,15 +119,42 @@ export function TableOverlay({ table, selection, onSelectionChange, onRowResize,
         table.merges,
       );
       onSelectionChange({ kind: 'range', ...range });
-    } else {
-      const resolved = resolveCellRect(point.row, point.col, table.rowHeightsMm, table.colWidthsMm, table.merges);
-      onSelectionChange({ kind: 'single', row: resolved.row, col: resolved.col });
-      setDragStart({ row: point.row, col: point.col });
+      return;
     }
+    // No shift → defer: a click selects the cell (on release), a drag past the
+    // threshold moves the whole table (drag-to-place).
+    moveRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startXMm: table.x,
+      startYMm: table.y,
+      cell: point,
+      moved: false,
+    };
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!rootRef.current || !dragStart) return;
+    if (!rootRef.current) return;
+
+    // Body drag-to-move (no shift): once travel passes the threshold, reposition
+    // the whole table to an absolute mm coordinate.
+    const mv = moveRef.current;
+    if (mv && !e.shiftKey && e.buttons !== 0) {
+      const dx = e.clientX - mv.clientX;
+      const dy = e.clientY - mv.clientY;
+      if (!mv.moved && Math.hypot(dx, dy) > MOVE_THRESHOLD_PX) mv.moved = true;
+      if (mv.moved && onMove) {
+        const round1 = (v: number) => Math.round(v * 10) / 10;
+        onMove(
+          Math.max(0, round1(mv.startXMm + dx / PX_PER_MM)),
+          Math.max(0, round1(mv.startYMm + dy / PX_PER_MM)),
+        );
+      }
+      return;
+    }
+
+    // Range selection drag (shift, or extending an existing range).
+    if (!dragStart) return;
     if (!e.shiftKey && e.buttons === 0) return;
     const rect = rootRef.current.getBoundingClientRect();
     const point = cellFromPoint(e.clientX - rect.left, e.clientY - rect.top);
@@ -128,6 +169,15 @@ export function TableOverlay({ table, selection, onSelectionChange, onRowResize,
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const mv = moveRef.current;
+    if (mv) {
+      moveRef.current = null;
+      // No travel → it was a click: select the pressed cell.
+      if (!mv.moved) {
+        const resolved = resolveCellRect(mv.cell.row, mv.cell.col, table.rowHeightsMm, table.colWidthsMm, table.merges);
+        onSelectionChange({ kind: 'single', row: resolved.row, col: resolved.col });
+      }
+    }
     setDragStart(null);
     try { rootRef.current?.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
   };
@@ -177,6 +227,7 @@ export function TableOverlay({ table, selection, onSelectionChange, onRowResize,
         width: widthPx,
         height: heightPx,
         touchAction: 'none',
+        cursor: 'move',
       }}
       className="z-10"
     >

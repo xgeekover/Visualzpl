@@ -1463,6 +1463,10 @@ export function LabelEditor() {
                 table={selected}
                 selection={cellSelection}
                 onSelectionChange={setCellSelection}
+                onMove={(x, y) => {
+                  if (selected.type !== 'table') return;
+                  updateObject(selected.id, { x, y });
+                }}
                 onRowResize={(idx, mm) => {
                   if (selected.type !== 'table') return;
                   const next = [...selected.rowHeightsMm];
