@@ -11,7 +11,9 @@
  * glyph shapes are an approximation. The exported ZPL remains the source of
  * truth for the physical printer.
  *
- * Supported: ^XA ^XZ ^CI ^PW ^LL ^FO ^FT ^A ^FB ^FD ^FS ^GB ^GFA ^BY ^BC ^BQ.
+ * Supported: ^XA ^XZ ^CI ^PW ^LL ^FO ^FT ^A ^FB ^FD ^FS ^GB ^GFA ^BY, and
+ * barcodes ^BC (Code128) ^B3 (Code39) ^B2 (ITF) ^BA (Code93) ^BE (EAN-13)
+ * ^B8 (EAN-8) ^BU (UPC-A) ^BQ (QR) ^BX (Data Matrix) ^B7 (PDF417).
  * Unknown commands are skipped so a label still renders.
  */
 import { toCanvas as bwipToCanvas } from 'bwip-js/browser';
@@ -38,8 +40,35 @@ interface BlockState {
 
 type Pending =
   | { kind: 'text' }
-  | { kind: 'code128'; height: number; module: number; line: boolean; above: boolean }
-  | { kind: 'qr'; mag: number; ec: string };
+  | {
+      kind: 'barcode';
+      bcid: string;   // bwip-js symbology id
+      twoD: boolean;
+      height: number; // linear bar height in dots
+      module: number; // module width in dots (scale)
+      includetext: boolean;
+      mag: number;    // 2D cell magnification / module size
+      ec: string;     // 2D error-correction level (QR)
+    };
+
+// ZPL barcode command (^B..) → bwip-js symbology. `heightIdx` is the param
+// index of the linear bar height (the interpretation-line flag sits at
+// heightIdx+1); 2D codes size by module/scale (`magIdx`) instead.
+const BARCODE_MAP: Record<
+  string,
+  { bcid: string; twoD?: boolean; heightIdx?: number; magIdx?: number }
+> = {
+  BC: { bcid: 'code128', heightIdx: 1 },
+  B3: { bcid: 'code39', heightIdx: 2 },
+  B2: { bcid: 'interleaved2of5', heightIdx: 1 },
+  BA: { bcid: 'code93', heightIdx: 1 },
+  BE: { bcid: 'ean13', heightIdx: 1 },
+  B8: { bcid: 'ean8', heightIdx: 1 },
+  BU: { bcid: 'upca', heightIdx: 1 },
+  BQ: { bcid: 'qrcode', twoD: true, magIdx: 2 },
+  BX: { bcid: 'datamatrix', twoD: true, magIdx: 1 },
+  B7: { bcid: 'pdf417', twoD: true },
+};
 
 const toInt = (s: string | undefined, d = 0): number => {
   const n = parseInt(String(s ?? '').trim(), 10);
@@ -72,6 +101,7 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
   let font: FontState = { rot: 'N', h: 30, w: 0 };
   let block: BlockState | null = null;
   let byModule = 2;
+  let byHeight = 80;
   let pending: Pending = { kind: 'text' };
 
   const resetField = () => {
@@ -175,41 +205,52 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
   };
 
   const drawBarcode = (data: string) => {
+    if (pending.kind !== 'barcode') return;
+    const bc = pending;
     const tmp = document.createElement('canvas');
+    // bwip-js's TS type omits some valid BWIPP options (eclevel); build opts as
+    // a var and cast so the excess-property check doesn't fire.
+    type BwipOpts = Parameters<typeof bwipToCanvas>[1];
     try {
-      if (pending.kind === 'code128') {
-        bwipToCanvas(tmp, {
-          bcid: 'code128',
-          text: data,
-          scale: Math.max(1, pending.module),
-          height: Math.max(3, Math.round(pending.height / dpmm)), // mm
-          includetext: pending.line,
-          textxalign: 'center',
-          paddingwidth: 0,
-          paddingheight: 0,
-        });
-        // Force the bar height to the ZPL height (dots), keep module-accurate width.
-        ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, ox, oy, tmp.width, Math.max(1, pending.height));
-      } else if (pending.kind === 'qr') {
-        // VisualZPL emits ^FD "<EC><Mode>,<payload>" (e.g. "MA,https://…"); strip it.
-        const payload = data.replace(/^[LMQH]?[A-Za-z0-9],/, '');
-        // `eclevel` is a valid BWIPP qrcode option but missing from bwip-js's
-        // TS type; assign to a var so the excess-property check doesn't fire.
-        const qrOpts = {
-          bcid: 'qrcode' as const,
+      if (bc.twoD) {
+        let payload = data;
+        let ec = bc.ec;
+        if (bc.bcid === 'qrcode') {
+          // ^FD "<EC><Mode>,<payload>" (e.g. "MA,https://…") → strip the prefix.
+          const m = /^([LMQH])[A-Za-z0-9],/.exec(data);
+          if (m) ec = m[1];
+          payload = data.replace(/^[LMQH]?[A-Za-z0-9],/, '');
+        }
+        const opts: Record<string, unknown> = {
+          bcid: bc.bcid,
           text: payload,
-          scale: Math.max(1, pending.mag),
-          eclevel: /^[LMQH]$/.test(pending.ec) ? pending.ec : 'M',
+          scale: Math.max(2, bc.mag),
           paddingwidth: 0,
           paddingheight: 0,
         };
-        bwipToCanvas(tmp, qrOpts);
+        if (bc.bcid === 'qrcode') opts.eclevel = /^[LMQH]$/.test(ec) ? ec : 'M';
+        bwipToCanvas(tmp, opts as unknown as BwipOpts);
         ctx.drawImage(tmp, ox, oy);
+      } else {
+        const opts = {
+          bcid: bc.bcid,
+          text: data,
+          scale: Math.max(1, bc.module),
+          height: Math.max(3, Math.round(bc.height / dpmm)), // mm
+          includetext: bc.includetext,
+          textxalign: 'center',
+          paddingwidth: 0,
+          paddingheight: 0,
+        };
+        bwipToCanvas(tmp, opts as BwipOpts);
+        // Force the bar height to the ZPL height (dots), keep module-accurate width.
+        ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, ox, oy, tmp.width, Math.max(1, bc.height));
       }
     } catch {
-      // Unrenderable barcode data — leave a light placeholder box.
+      // Unrenderable barcode data (e.g. EAN with the wrong digit count) →
+      // leave a light placeholder box instead of failing the whole label.
       ctx.strokeStyle = '#94a3b8';
-      ctx.strokeRect(ox, oy, 80, Math.max(20, pending.kind === 'code128' ? pending.height : 80));
+      ctx.strokeRect(ox, oy, 80, Math.max(20, bc.twoD ? 80 : bc.height));
       ctx.strokeStyle = '#000000';
     }
   };
@@ -265,23 +306,26 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
       continue;
     }
     if (up2 === 'BY') {
-      byModule = toInt(raw.slice(2).split(',')[0], byModule) || byModule;
+      // ^BY<module>,<ratio>,<height> — module width + default bar height (dots).
+      const p = raw.slice(2).split(',');
+      byModule = toInt(p[0], byModule) || byModule;
+      if (p[2] !== undefined && p[2] !== '') byHeight = toInt(p[2], byHeight) || byHeight;
       continue;
     }
-    if (up2 === 'BC') {
+    if (raw[0].toUpperCase() === 'B' && BARCODE_MAP[up2]) {
+      const cfg = BARCODE_MAP[up2];
       const p = raw.slice(2).split(',');
+      const lineFlag = cfg.heightIdx != null ? p[cfg.heightIdx + 1] : undefined;
       pending = {
-        kind: 'code128',
-        height: toInt(p[1], 80),
+        kind: 'barcode',
+        bcid: cfg.bcid,
+        twoD: !!cfg.twoD,
+        height: cfg.heightIdx != null ? toInt(p[cfg.heightIdx], byHeight) : byHeight,
         module: byModule,
-        line: (p[2] || 'Y').toUpperCase() !== 'N',
-        above: (p[3] || 'N').toUpperCase() === 'Y',
+        includetext: cfg.twoD ? false : (lineFlag ? lineFlag.toUpperCase() !== 'N' : true),
+        mag: cfg.magIdx != null ? toInt(p[cfg.magIdx], 3) : 3,
+        ec: 'M',
       };
-      continue;
-    }
-    if (up2 === 'BQ') {
-      const p = raw.slice(2).split(',');
-      pending = { kind: 'qr', mag: toInt(p[2], 3), ec: 'M' };
       continue;
     }
     if (raw[0].toUpperCase() === 'A') {
