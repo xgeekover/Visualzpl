@@ -1,0 +1,42 @@
+appId: io.visualzpl.desktop
+productName: VisualZPL
+copyright: VisualZPL
+
+directories:
+  output: dist-app
+  buildResources: build
+
+# Only the app runtime is packaged — the renderer is the built frontend.
+files:
+  - main.cjs
+  - preload.cjs
+  - package.json
+  - renderer/**/*
+
+# ── No-install artifacts per OS ─────────────────────────────────────────────
+win:
+  target:
+    - target: portable   # single self-contained .exe, no installer
+    - target: nsis        # optional classic installer
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+mac:
+  target:
+    - target: dmg
+    - target: zip         # portable: unzip → drag VisualZPL.app to run
+  category: public.app-category.productivity
+  # Unsigned build: ships without an Apple Developer signature. Gatekeeper will
+  # require right-click → Open on first launch. Set identity for a signed build.
+  identity: null
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+
+linux:
+  target:
+    - target: AppImage    # single executable file, no install
+  category: Graphics
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}

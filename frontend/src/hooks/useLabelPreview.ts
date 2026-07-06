@@ -22,8 +22,20 @@ import { useEffect, useRef, useState } from 'react';
 
 const PREVIEW_DEBOUNCE_MS = 400;
 
-/** Resolve the API base URL once at module load. Empty string => same-origin. */
+/**
+ * Resolve the API base URL once at module load.
+ *   - Desktop (Electron): `window.__VZPL_API_BASE__`, injected by the preload
+ *     script, points at the in-process loopback preview proxy (with its live
+ *     port). Preferred when present so the same build runs on web and desktop.
+ *   - Web: build-time `VITE_API_BASE_URL`, else localhost:8080.
+ */
+const RUNTIME_API_BASE =
+  (typeof window !== 'undefined' &&
+    (window as unknown as { __VZPL_API_BASE__?: string }).__VZPL_API_BASE__) ||
+  undefined;
+
 const API_BASE_URL =
+  RUNTIME_API_BASE ??
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
   'http://localhost:8080';
 

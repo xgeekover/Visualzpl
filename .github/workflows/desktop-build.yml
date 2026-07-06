@@ -1,0 +1,62 @@
+name: Build desktop app
+
+# Builds the Electron desktop app natively on each OS. Windows can't be reliably
+# cross-compiled from macOS/Linux, so we use a matrix of native runners.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend (relative base for file:// loading)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build -- --base=./
+
+      - name: Install desktop deps
+        working-directory: desktop
+        # npm install (not ci): electron pulls platform-specific optional deps,
+        # so a single committed lockfile can't satisfy every runner.
+        run: npm install
+
+      - name: Copy renderer into the app
+        working-directory: desktop
+        run: npm run copy:renderer
+
+      - name: Package ${{ matrix.platform }}
+        working-directory: desktop
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload ${{ matrix.platform }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: visualzpl-${{ matrix.platform }}
+          path: |
+            desktop/dist-app/*.exe
+            desktop/dist-app/*.dmg
+            desktop/dist-app/*.zip
+            desktop/dist-app/*.AppImage
+          if-no-files-found: ignore
