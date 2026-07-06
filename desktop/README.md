@@ -1,28 +1,28 @@
 # VisualZPL Desktop
 
 Cross-platform (Windows / macOS / Linux) desktop build of VisualZPL, packaged
-with **Electron**. Produces **no-install** executables.
+with **Electron**. Produces **no-install** executables and previews labels
+**fully offline** — safe for air-gapped / closed networks (폐쇄망).
 
 ## Architecture
 
-The web app has two parts: a React frontend and a Java Spring Boot backend. The
-backend's *only* job the frontend uses is a **ZPL → PNG preview proxy** to
-[Labelary](https://labelary.com) (`POST /api/label/preview`). Everything else —
-ZPL generation, batch data, canvas editing — already runs client-side.
+The web app used a Java Spring Boot backend whose only job was proxying ZPL →
+PNG previews to [Labelary](https://labelary.com). That's gone here:
 
-So the desktop build **drops Java entirely**:
+- **Preview is rendered locally**, on-device, by `frontend/src/zpl/renderZpl.ts`
+  (2D canvas for text/boxes/graphics, **bwip-js** for barcodes/QR). No network,
+  no Labelary, no backend — works in a closed network.
+- The Electron main process is a thin shell: it just opens a window on the built
+  frontend. No Java, no JRE, no local server.
 
 ```
-Electron main (Node)
-├─ loopback HTTP proxy  →  re-implements POST /api/label/preview → Labelary
-└─ BrowserWindow        →  loads the built frontend (renderer/)
-     └─ preload injects the proxy URL as window.__VZPL_API_BASE__
+Electron main (Node)  →  BrowserWindow → renderer/ (built frontend)
+                                            └─ renders ZPL → canvas locally (offline)
 ```
 
-No JRE to bundle → a small, single-language app.
-
-> **Preview needs internet.** Labelary is a cloud renderer, so the live preview
-> requires a connection (same as the web app). Editing / ZPL export work offline.
+> Fidelity: preview text approximates the printer's scalable font; layout,
+> sizing, boxes, graphics and barcodes/QR are accurate. The exported ZPL remains
+> the source of truth for the physical printer.
 
 ## Build
 
@@ -57,15 +57,26 @@ npm run dev           # builds the frontend, then launches the Electron window
 | Linux | `VisualZPL-*-linux-*.AppImage` | `chmod +x` then run |
 | macOS | `VisualZPL-*-mac-*.zip` | unzip → drag `VisualZPL.app`; first launch: right-click → Open (unsigned) |
 
-## Cross-platform builds via CI
+## Cross-platform builds & auto-release (CI)
 
 `.github/workflows/desktop-build.yml` builds all three natively on
-`windows-latest` / `macos-latest` / `ubuntu-latest`. Trigger it manually
-(*workflow_dispatch*) or by pushing a `v*` tag; artifacts are uploaded per OS.
+`windows-latest` / `macos-latest` / `ubuntu-latest`.
+
+- **Manual build:** trigger via *workflow_dispatch* → artifacts uploaded per OS.
+- **Release:** push a `v*` tag (e.g. `git tag v0.1.0 && git push --tags`) →
+  each OS builds with `electron-builder --publish always`, creating a **GitHub
+  Release** for the tag with the Windows / macOS / Linux no-install downloads
+  attached.
+
+## Icon
+
+`build/icon.png` (512×512) is the source icon; electron-builder derives the
+Windows `.ico`, macOS `.icns`, and Linux icons from it. Regenerate with
+`node scripts/gen-icon.cjs`, or replace `build/icon.png` with your own.
 
 ## Notes
 
-- macOS builds are **unsigned**. For distribution, set `mac.identity` in
+- macOS builds are **unsigned**. For distribution set `mac.identity` in
   `electron-builder.yml` and provide signing/notarization credentials.
-- App icons use the Electron default. Add `build/icon.png` (Linux/Win) and
-  `build/icon.icns` (mac) to customize.
+- The old Java backend still lives in `../backend` for the web deployment; the
+  desktop app does not use it.

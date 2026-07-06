@@ -8,6 +8,10 @@ on:
     tags:
       - 'v*'
 
+# Needed for electron-builder to create/update the GitHub Release on a v* tag.
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -46,7 +50,9 @@ jobs:
 
       - name: Package ${{ matrix.platform }}
         working-directory: desktop
-        run: npx electron-builder --${{ matrix.platform }} --publish never
+        # On a v* tag: --publish always → creates/updates the GitHub Release and
+        # uploads the no-install artifacts to it. Otherwise just build (never).
+        run: npx electron-builder --${{ matrix.platform }} --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

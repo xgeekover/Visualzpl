@@ -9,9 +9,13 @@ directories:
 # Only the app runtime is packaged — the renderer is the built frontend.
 files:
   - main.cjs
-  - preload.cjs
   - package.json
   - renderer/**/*
+
+# Auto-release: `electron-builder --publish always` (on a v* tag in CI) creates
+# / updates a GitHub Release for the tag and uploads the artifacts to it.
+publish:
+  provider: github
 
 # ── No-install artifacts per OS ─────────────────────────────────────────────
 win:
