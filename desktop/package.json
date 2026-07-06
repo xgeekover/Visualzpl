@@ -1,0 +1,29 @@
+{
+  "name": "visualzpl-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VisualZPL desktop app (Electron). Bundles the editor UI and an in-process Labelary preview proxy — no Java, no install.",
+  "author": "VisualZPL",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xgeekover/Visualzpl.git"
+  },
+  "main": "main.cjs",
+  "scripts": {
+    "build:frontend": "cd ../frontend && npm ci && npm run build -- --base=./",
+    "copy:renderer": "node scripts/copy-renderer.cjs",
+    "prepare:app": "npm run build:frontend && npm run copy:renderer",
+    "start": "electron .",
+    "dev": "npm run prepare:app && electron .",
+    "pack": "npm run prepare:app && electron-builder --dir",
+    "dist": "npm run prepare:app && electron-builder",
+    "dist:mac": "npm run prepare:app && electron-builder --mac",
+    "dist:win": "npm run prepare:app && electron-builder --win",
+    "dist:linux": "npm run prepare:app && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.7.6",
+    "electron-builder": "^24.13.3"
+  }
+}
