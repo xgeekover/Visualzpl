@@ -14,8 +14,12 @@ files:
 
 # Auto-release: `electron-builder --publish always` (on a v* tag in CI) creates
 # / updates a GitHub Release for the tag and uploads the artifacts to it.
+# owner/repo are explicit — the git remote can't be auto-detected after the
+# repository was renamed/moved.
 publish:
   provider: github
+  owner: xgeekover
+  repo: Visualzpl
 
 # ── No-install artifacts per OS ─────────────────────────────────────────────
 win:
