@@ -11,7 +11,7 @@
  * glyph shapes are an approximation. The exported ZPL remains the source of
  * truth for the physical printer.
  *
- * Supported: ^XA ^XZ ^CI ^PW ^LL ^FO ^FT ^A ^FB ^FD ^FS ^GB ^GFA ^BY, and
+ * Supported: ^XA ^XZ ^CI ^PW ^LL ^FO ^FT ^A ^FB ^FD ^FS ^GB ^GC ^GD ^GE ^GFA ^BY, and
  * barcodes ^BC (Code128) ^B3 (Code39) ^B2 (ITF) ^BA (Code93) ^BE (EAN-13)
  * ^B8 (EAN-8) ^BU (UPC-A) ^BQ (QR) ^BX (Data Matrix) ^B7 (PDF417).
  * Unknown commands are skipped so a label still renders.
@@ -123,6 +123,67 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
       ctx.fillRect(ox + t, oy + t, w - 2 * t, h - 2 * t);
       ctx.fillStyle = '#000000';
     }
+  };
+
+  // ^GC<diameter>,<thickness>,<color> — circle (filled if thickness fills it).
+  const drawCircle = (rest: string) => {
+    const p = rest.split(',');
+    const d = toInt(p[0], 1);
+    const t = Math.max(1, toInt(p[1], 1));
+    const cx = ox + d / 2;
+    const cy = oy + d / 2;
+    ctx.beginPath();
+    if (t * 2 >= d) {
+      ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+    } else {
+      ctx.arc(cx, cy, Math.max(0.5, (d - t) / 2), 0, Math.PI * 2);
+      ctx.lineWidth = t;
+      ctx.strokeStyle = '#000000';
+      ctx.stroke();
+    }
+  };
+
+  // ^GE<width>,<height>,<thickness>,<color> — ellipse.
+  const drawEllipse = (rest: string) => {
+    const p = rest.split(',');
+    const w = toInt(p[0], 1);
+    const h = toInt(p[1], 1);
+    const t = Math.max(1, toInt(p[2], 1));
+    const cx = ox + w / 2;
+    const cy = oy + h / 2;
+    ctx.beginPath();
+    if (t * 2 >= Math.min(w, h)) {
+      ctx.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+    } else {
+      ctx.ellipse(cx, cy, Math.max(0.5, (w - t) / 2), Math.max(0.5, (h - t) / 2), 0, 0, Math.PI * 2);
+      ctx.lineWidth = t;
+      ctx.strokeStyle = '#000000';
+      ctx.stroke();
+    }
+  };
+
+  // ^GD<width>,<height>,<thickness>,<color>,<orientation> — diagonal line.
+  const drawDiagonal = (rest: string) => {
+    const p = rest.split(',');
+    const w = toInt(p[0], 1);
+    const h = toInt(p[1], 1);
+    const t = Math.max(1, toInt(p[2], 1));
+    const o = (p[4] || 'R').toUpperCase(); // R = "\", L = "/"
+    ctx.beginPath();
+    if (o === 'L') {
+      ctx.moveTo(ox, oy + h);
+      ctx.lineTo(ox + w, oy);
+    } else {
+      ctx.moveTo(ox, oy);
+      ctx.lineTo(ox + w, oy + h);
+    }
+    ctx.lineWidth = t;
+    ctx.strokeStyle = '#000000';
+    ctx.stroke();
   };
 
   const drawGfa = (rest: string) => {
@@ -303,6 +364,18 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
     }
     if (up2 === 'GB') {
       drawBox(raw.slice(2));
+      continue;
+    }
+    if (up2 === 'GC') {
+      drawCircle(raw.slice(2));
+      continue;
+    }
+    if (up2 === 'GD') {
+      drawDiagonal(raw.slice(2));
+      continue;
+    }
+    if (up2 === 'GE') {
+      drawEllipse(raw.slice(2));
       continue;
     }
     if (up2 === 'BY') {
