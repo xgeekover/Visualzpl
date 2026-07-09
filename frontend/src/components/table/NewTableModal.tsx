@@ -31,20 +31,20 @@ export function NewTableModal({ isOpen, onClose, onConfirm }: Props) {
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/40 z-30 flex items-center justify-center"
+      className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Insert table"
-        className="bg-white rounded shadow-xl w-72 p-4"
+        className="w-72 rounded-xl bg-white p-5 shadow-pop ring-1 ring-slate-200 animate-pop-in"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-slate-800 mb-3">Insert Table</h2>
-        <div className="grid grid-cols-2 gap-2 mb-4">
+        <h2 className="mb-4 text-sm font-semibold text-slate-800">Insert Table</h2>
+        <div className="mb-5 grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Rows</label>
+            <label className="field-label">Rows</label>
             <input
               ref={firstInputRef}
               type="number"
@@ -54,7 +54,7 @@ export function NewTableModal({ isOpen, onClose, onConfirm }: Props) {
               onChange={e => setRows(Number(e.target.value))}
               onKeyDown={e => { if (e.key === 'Enter') submit(); }}
               autoFocus
-              className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
+              className="input"
             />
           </div>
           <NumberField
@@ -66,18 +66,10 @@ export function NewTableModal({ isOpen, onClose, onConfirm }: Props) {
           />
         </div>
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50"
-          >
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={submit}
-            className="px-3 py-1.5 text-sm text-white bg-blue-600 border border-blue-600 rounded hover:bg-blue-700"
-          >
+          <button type="button" onClick={submit} className="btn-primary">
             Insert
           </button>
         </div>

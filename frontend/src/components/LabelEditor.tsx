@@ -1544,9 +1544,11 @@ export function LabelEditor() {
               />
             )
           ) : (
-            <p className="text-sm text-slate-400 italic">
-              Select an object on the canvas.
-            </p>
+            <div className="mt-2 rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm leading-relaxed text-slate-400">
+              Select an object on the canvas
+              <br />
+              <span className="text-xs">to edit its properties.</span>
+            </div>
           )}
         </aside>
       </div>
@@ -1990,7 +1992,7 @@ function PresetMenu({
         title="Load a predefined label layout"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded hover:bg-violet-100 transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg ring-1 ring-inset ring-violet-200 shadow-sm transition-all hover:bg-violet-100 active:scale-[0.98]"
       >
         <SparkleIcon />
         Quick Presets
@@ -2000,7 +2002,7 @@ function PresetMenu({
         <div
           role="menu"
           aria-label="Quick Presets"
-          className="absolute top-full mt-1 left-0 w-80 bg-white border border-slate-200 rounded shadow-lg z-20 overflow-hidden"
+          className="absolute top-full mt-2 left-0 w-80 bg-white rounded-xl ring-1 ring-slate-200 shadow-pop z-20 overflow-hidden animate-pop-in"
         >
           <ul className="divide-y divide-slate-100">
             {presets.map(preset => (

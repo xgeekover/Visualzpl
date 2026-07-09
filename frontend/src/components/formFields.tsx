@@ -3,14 +3,8 @@ import type { ChangeEvent } from 'react';
 export function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-500 mb-1">
-        {label}
-      </label>
-      <input
-        readOnly
-        value={value}
-        className="w-full border border-slate-200 bg-slate-50 text-slate-500 rounded px-2 py-1 text-sm"
-      />
+      <label className="field-label">{label}</label>
+      <input readOnly value={value} className="input bg-slate-50 text-slate-500" />
     </div>
   );
 }
@@ -31,22 +25,11 @@ export function TextField({
   ) => onChange(e.target.value);
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
-        {label}
-      </label>
+      <label className="field-label">{label}</label>
       {multiline ? (
-        <textarea
-          rows={2}
-          value={value}
-          onChange={handle}
-          className="w-full border border-slate-300 rounded px-2 py-1 text-sm font-mono"
-        />
+        <textarea rows={2} value={value} onChange={handle} className="input font-mono resize-y" />
       ) : (
-        <input
-          value={value}
-          onChange={handle}
-          className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-        />
+        <input value={value} onChange={handle} className="input" />
       )}
     </div>
   );
@@ -69,9 +52,7 @@ export function NumberField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
-        {label}
-      </label>
+      <label className="field-label">{label}</label>
       <input
         type="number"
         value={value}
@@ -79,7 +60,7 @@ export function NumberField({
         min={min}
         max={max}
         onChange={e => onChange(Number(e.target.value))}
-        className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
+        className="input"
       />
     </div>
   );
@@ -98,13 +79,11 @@ export function SelectField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
-        {label}
-      </label>
+      <label className="field-label">{label}</label>
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full border border-slate-300 rounded px-2 py-1 text-sm bg-white"
+        className="input cursor-pointer"
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>

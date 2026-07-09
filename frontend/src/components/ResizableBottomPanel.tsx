@@ -112,7 +112,7 @@ export function ResizableBottomPanel({
           onClick={onToggleCollapse}
           title={collapsed ? 'Show code & preview' : 'Hide code & preview'}
           aria-expanded={!collapsed}
-          className="inline-flex items-center justify-center w-6 h-6 rounded hover:bg-slate-200 text-slate-600"
+          className="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
         >
           {collapsed ? '▲' : '▼'}
         </button>

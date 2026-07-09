@@ -50,7 +50,7 @@ export function TablePropertyForm({ table, onChange, onDelete }: Props) {
         <NumberField label="Y (mm)" value={table.y} step={0.5}
           onChange={v => onChange({ y: v })} />
       </div>
-      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-700">
         Table rotation is not yet supported in the printed output. Rotate
         the printer media or split into individual text/barcode objects if
         you need rotated content.
@@ -64,24 +64,24 @@ export function TablePropertyForm({ table, onChange, onDelete }: Props) {
       />
       <div className="grid grid-cols-2 gap-2">
         <button onClick={addRow}
-          className="px-2 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded">
+          className="px-2 py-1.5 text-xs font-medium text-slate-700 bg-white rounded-lg ring-1 ring-inset ring-slate-200 shadow-sm transition hover:bg-blue-50 hover:text-blue-700 hover:ring-blue-200 active:scale-[0.98]">
           + Row ({rows})
         </button>
         <button onClick={removeRow} disabled={rows <= 1}
-          className="px-2 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded disabled:opacity-50">
+          className="px-2 py-1.5 text-xs font-medium text-slate-700 bg-white rounded-lg ring-1 ring-inset ring-slate-200 shadow-sm transition hover:bg-red-50 hover:text-red-700 hover:ring-red-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
           – Row
         </button>
         <button onClick={addCol}
-          className="px-2 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded">
+          className="px-2 py-1.5 text-xs font-medium text-slate-700 bg-white rounded-lg ring-1 ring-inset ring-slate-200 shadow-sm transition hover:bg-blue-50 hover:text-blue-700 hover:ring-blue-200 active:scale-[0.98]">
           + Column ({cols})
         </button>
         <button onClick={removeCol} disabled={cols <= 1}
-          className="px-2 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-red-50 border border-slate-200 rounded disabled:opacity-50">
+          className="px-2 py-1.5 text-xs font-medium text-slate-700 bg-white rounded-lg ring-1 ring-inset ring-slate-200 shadow-sm transition hover:bg-red-50 hover:text-red-700 hover:ring-red-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none">
           – Column
         </button>
       </div>
       <button onClick={onDelete}
-        className="w-full mt-4 px-3 py-2 text-sm text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200">
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200 transition hover:bg-red-100 active:scale-[0.98]">
         Delete Table
       </button>
     </div>
