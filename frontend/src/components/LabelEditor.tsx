@@ -1716,8 +1716,9 @@ function LivePreviewPanel({
         <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
           Live Preview
         </span>
-        <span className={`text-xs font-mono ${statusClass}`}>
-          Render Status: {statusLabel}
+        <span className={`inline-flex items-center gap-1.5 text-xs font-mono ${statusClass}`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+          {statusLabel}
         </span>
       </header>
 
@@ -1747,7 +1748,7 @@ function LivePreviewPanel({
         {error && (
           <div
             role="alert"
-            className="absolute inset-x-3 bottom-3 px-3 py-2 bg-red-50 border border-red-300 rounded shadow-sm"
+            className="absolute inset-x-3 bottom-3 rounded-lg bg-red-50 px-3 py-2 ring-1 ring-red-200 shadow-sm animate-fade-in"
           >
             <div className="text-xs font-semibold text-red-800 mb-0.5">
               ZPL Render Error
