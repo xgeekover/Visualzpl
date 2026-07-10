@@ -1297,12 +1297,17 @@ export function LabelEditor() {
   // ── Render ──────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-slate-100">
-      <header className="px-6 py-3 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
+      <header className="px-6 py-3 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-slate-800">
-            VisualZPL{' '}
-            <span className="text-slate-400 font-normal">— Label Editor</span>
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white text-[13px] font-bold shadow-sm shadow-blue-600/30 select-none">
+              Z
+            </span>
+            <h1 className="text-[15px] font-semibold tracking-tight text-slate-800">
+              VisualZPL{' '}
+              <span className="text-slate-400 font-normal">Label Editor</span>
+            </h1>
+          </div>
           <PresetMenu
             presets={LABEL_PRESETS}
             onSelect={handleLoadPreset}
@@ -1335,7 +1340,7 @@ export function LabelEditor() {
             type="button"
             onClick={handleCopyToClipboard}
             title="Copy the generated ZPL string to your clipboard"
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+            className="btn-secondary"
           >
             <ClipboardIcon />
             Copy to Clipboard
@@ -1344,7 +1349,7 @@ export function LabelEditor() {
             type="button"
             onClick={handleDownloadZpl}
             title="Download the generated ZPL as a .zpl file"
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded hover:bg-blue-700 transition-colors"
+            className="btn-primary"
           >
             <DownloadIcon />
             Download ZPL File
@@ -1358,7 +1363,7 @@ export function LabelEditor() {
                 ? `Open batch data editor (${detectedVariableCount} variable${detectedVariableCount === 1 ? '' : 's'} detected)`
                 : 'Open batch data editor — add {{variable}} placeholders in your label first'
             }
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors"
+            className="btn-secondary"
           >
             <TableIcon />
             Batch Data
@@ -1380,7 +1385,7 @@ export function LabelEditor() {
             onClick={handlePrintToZebra}
             disabled={!canPrint}
             title={printButtonTooltip}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 border border-emerald-600 rounded hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed transition-colors"
+            className="btn text-white bg-emerald-600 shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
           >
             <PrinterIcon />
             {printStatus === 'sending' ? 'Sending…' : 'Print to Zebra'}
@@ -1429,18 +1434,20 @@ export function LabelEditor() {
           </h2>
           <ul className="flex-1 space-y-1 overflow-y-auto">
             {doc.objects.length === 0 ? (
-              <li className="px-2 py-2 text-xs text-slate-400 italic">
+              <li className="mt-1 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs leading-relaxed text-slate-400">
                 No objects yet.
+                <br />
+                Add one from the tools above.
               </li>
             ) : (
               doc.objects.map(o => (
                 <li
                   key={o.id}
                   onClick={() => setSelectedId(o.id)}
-                  className={`px-2 py-1.5 text-sm rounded cursor-pointer flex items-center gap-2 ${
+                  className={`px-2 py-1.5 text-sm rounded-lg cursor-pointer flex items-center gap-2 transition-colors ${
                     selectedId === o.id
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'hover:bg-slate-100 text-slate-700'
+                      ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
+                      : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   <span className="font-mono text-xs w-5 text-center">
@@ -1462,8 +1469,16 @@ export function LabelEditor() {
         </aside>
 
         {/* ── Center canvas ────────────────────────────────── */}
-        <main className="flex-1 flex items-center justify-center bg-slate-200 overflow-auto p-8">
-          <div className="relative bg-white shadow-xl ring-1 ring-slate-300">
+        <main
+          className="flex-1 flex items-center justify-center overflow-auto p-8"
+          style={{
+            backgroundColor: '#e9edf4',
+            backgroundImage:
+              'radial-gradient(rgba(100,116,139,0.28) 1px, transparent 1px)',
+            backgroundSize: '16px 16px',
+          }}
+        >
+          <div className="relative bg-white shadow-soft ring-1 ring-slate-200/80">
             <canvas ref={canvasElRef} />
             {selected?.type === 'table' && (
               <TableOverlay
@@ -1529,9 +1544,11 @@ export function LabelEditor() {
               />
             )
           ) : (
-            <p className="text-sm text-slate-400 italic">
-              Select an object on the canvas.
-            </p>
+            <div className="mt-2 rounded-lg border border-dashed border-slate-200 px-3 py-8 text-center text-sm leading-relaxed text-slate-400">
+              Select an object on the canvas
+              <br />
+              <span className="text-xs">to edit its properties.</span>
+            </div>
           )}
         </aside>
       </div>
@@ -1634,9 +1651,9 @@ function ToolButton({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 bg-slate-50 hover:bg-blue-50 hover:text-blue-700 rounded border border-slate-200 transition-colors"
+      className="group flex items-center gap-2.5 w-full px-2.5 py-2 text-sm font-medium text-slate-700 bg-white rounded-lg ring-1 ring-inset ring-slate-200 shadow-sm transition-all duration-150 hover:bg-blue-50/60 hover:text-blue-700 hover:ring-blue-300 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
     >
-      <span className="w-7 h-7 inline-flex items-center justify-center font-mono text-xs bg-white border border-slate-200 rounded">
+      <span className="w-8 h-8 shrink-0 inline-flex items-center justify-center font-mono text-xs text-slate-500 bg-slate-100 rounded-md transition-colors group-hover:bg-blue-100 group-hover:text-blue-600">
         {icon}
       </span>
       <span>{label}</span>
@@ -1655,11 +1672,11 @@ function SizeInput({
 }) {
   return (
     <label className="flex items-center gap-2">
-      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-xs font-medium text-slate-500">{label}</span>
       <input
         type="number"
         min={1}
-        className="w-20 border border-slate-300 rounded px-2 py-1 text-sm"
+        className="w-20 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-800 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
         value={value ?? ''}
         onChange={e => onChange(Number(e.target.value))}
       />
@@ -1699,8 +1716,9 @@ function LivePreviewPanel({
         <span className="text-xs font-mono uppercase tracking-wider text-slate-500">
           Live Preview
         </span>
-        <span className={`text-xs font-mono ${statusClass}`}>
-          Render Status: {statusLabel}
+        <span className={`inline-flex items-center gap-1.5 text-xs font-mono ${statusClass}`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+          {statusLabel}
         </span>
       </header>
 
@@ -1730,7 +1748,7 @@ function LivePreviewPanel({
         {error && (
           <div
             role="alert"
-            className="absolute inset-x-3 bottom-3 px-3 py-2 bg-red-50 border border-red-300 rounded shadow-sm"
+            className="absolute inset-x-3 bottom-3 rounded-lg bg-red-50 px-3 py-2 ring-1 ring-red-200 shadow-sm animate-fade-in"
           >
             <div className="text-xs font-semibold text-red-800 mb-0.5">
               ZPL Render Error
@@ -1975,7 +1993,7 @@ function PresetMenu({
         title="Load a predefined label layout"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded hover:bg-violet-100 transition-colors"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-700 bg-violet-50 rounded-lg ring-1 ring-inset ring-violet-200 shadow-sm transition-all hover:bg-violet-100 active:scale-[0.98]"
       >
         <SparkleIcon />
         Quick Presets
@@ -1985,7 +2003,7 @@ function PresetMenu({
         <div
           role="menu"
           aria-label="Quick Presets"
-          className="absolute top-full mt-1 left-0 w-80 bg-white border border-slate-200 rounded shadow-lg z-20 overflow-hidden"
+          className="absolute top-full mt-2 left-0 w-80 bg-white rounded-xl ring-1 ring-slate-200 shadow-pop z-20 overflow-hidden animate-pop-in"
         >
           <ul className="divide-y divide-slate-100">
             {presets.map(preset => (

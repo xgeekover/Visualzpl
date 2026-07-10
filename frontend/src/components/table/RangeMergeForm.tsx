@@ -64,7 +64,7 @@ export function RangeMergeForm({ table, range, onTableChange, onClearSelection }
       {existing ? (
         <button
           onClick={doUnmerge}
-          className="w-full px-3 py-2 text-sm text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded"
+          className="w-full rounded-lg px-3 py-2 text-sm font-medium text-amber-800 bg-amber-50 ring-1 ring-inset ring-amber-200 transition hover:bg-amber-100 active:scale-[0.98]"
         >
           Unmerge Cells
         </button>
@@ -72,7 +72,7 @@ export function RangeMergeForm({ table, range, onTableChange, onClearSelection }
         <button
           onClick={doMerge}
           disabled={rowCount === 1 && colCount === 1}
-          className="w-full px-3 py-2 text-sm text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded disabled:opacity-50"
+          className="w-full rounded-lg px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 ring-1 ring-inset ring-blue-200 transition hover:bg-blue-100 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
         >
           Merge Cells
         </button>

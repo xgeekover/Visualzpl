@@ -139,13 +139,13 @@ export function BatchDataModal({
       aria-hidden={!isOpen}
       className={
         isOpen
-          ? 'fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4'
+          ? 'fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in'
           : 'hidden'
       }
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+        className="bg-white rounded-xl ring-1 ring-slate-200 shadow-pop w-full max-w-3xl max-h-[85vh] flex flex-col animate-pop-in"
         onClick={event => event.stopPropagation()}
       >
         <header className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -168,7 +168,7 @@ export function BatchDataModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="w-8 h-8 inline-flex items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+            className="w-8 h-8 inline-flex items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
             ✕
           </button>
@@ -196,7 +196,7 @@ export function BatchDataModal({
             </div>
           )}
 
-          <div className="border border-slate-200 rounded overflow-hidden">
+          <div className="rounded-lg ring-1 ring-slate-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
@@ -311,7 +311,7 @@ export function BatchDataModal({
           </div>
         )}
 
-        <footer className="px-5 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50 rounded-b-lg">
+        <footer className="px-5 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50 rounded-b-xl">
           <span className="text-sm text-slate-600">
             Ready to print{' '}
             <span className="font-semibold text-slate-800">{labelCount}</span>{' '}
@@ -323,7 +323,7 @@ export function BatchDataModal({
               onClick={handleDownloadBatch}
               disabled={downloadDisabled}
               title={actionBlockedReason}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-secondary"
             >
               Download Batch ZPL
             </button>
@@ -335,7 +335,7 @@ export function BatchDataModal({
                 actionBlockedReason ??
                 (!canPrint ? printDisabledReason : undefined)
               }
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 border border-emerald-600 rounded hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed transition-colors"
+              className="btn text-white bg-emerald-600 shadow-sm shadow-emerald-600/20 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
             >
               {isPrinting ? 'Sending…' : 'Print Batch to Zebra'}
             </button>
@@ -378,7 +378,7 @@ function CellInput({
       }
       title={issue?.message}
       aria-invalid={issue?.severity === 'error' ? true : undefined}
-      className={`w-full border rounded px-2 py-1 text-sm font-mono focus:outline-none ${severityClass}`}
+      className={`w-full rounded-lg border px-2 py-1 text-sm font-mono transition focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${severityClass}`}
     />
   );
 }

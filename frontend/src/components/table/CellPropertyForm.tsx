@@ -149,7 +149,7 @@ export function CellPropertyForm({ table, row, col, onTableChange }: Props) {
           </div>
           <button
             onClick={switchToImage}
-            className="w-full px-2 py-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded"
+            className="w-full rounded-lg px-2 py-1.5 text-xs font-medium text-slate-700 bg-white ring-1 ring-inset ring-slate-200 shadow-sm transition hover:bg-blue-50 hover:text-blue-700 hover:ring-blue-200 active:scale-[0.98]"
           >
             Replace image
           </button>
@@ -166,7 +166,7 @@ export function CellPropertyForm({ table, row, col, onTableChange }: Props) {
       {existing && (
         <button
           onClick={() => setCell(null)}
-          className="w-full mt-2 px-3 py-1.5 text-xs text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"
+          className="mt-2 w-full rounded-lg px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 ring-1 ring-inset ring-red-200 transition hover:bg-red-100 active:scale-[0.98]"
         >
           Clear cell
         </button>
