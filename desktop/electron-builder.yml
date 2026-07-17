@@ -22,16 +22,31 @@ publish:
   repo: Visualzpl
 
 # ── No-install artifacts per OS ─────────────────────────────────────────────
+# Windows ships THREE flavours so locked-down / air-gapped (폐쇄망) PCs have a
+# path that corporate policy won't block:
+#   * zip       → unzip anywhere, run VisualZPL.exe. No installer, and (unlike
+#                 portable) no %TEMP% self-extraction, so AppLocker/SRP rules
+#                 that forbid running executables from temp don't kill it.
+#   * nsis      → classic per-user installer; runs from a real install dir.
+#   * portable  → single self-extracting .exe (convenient, but self-extracts to
+#                 %TEMP% first — may be blocked by corporate AppLocker).
+# All three carried DISTINCT artifact names; previously portable + nsis shared
+# one name (…-win-x64.exe) and collided, so only one actually reached Releases.
 win:
   target:
-    - target: portable   # single self-contained .exe, no installer
-    - target: nsis        # optional classic installer
-  artifactName: ${productName}-${version}-win-${arch}.${ext}
+    - target: zip
+    - target: nsis
+    - target: portable
+  artifactName: ${productName}-${version}-win-${arch}.${ext}   # → zip
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-win-${arch}-portable.${ext}
 
 mac:
   target:

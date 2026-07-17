@@ -39,7 +39,7 @@ unreliable):
 
 ```bash
 npm run dist:mac      # → VisualZPL-*-mac-*.dmg / .zip
-npm run dist:win      # → VisualZPL-*-win-*.exe (portable + nsis)
+npm run dist:win      # → VisualZPL-*-win-x64.zip + -setup.exe (nsis) + -portable.exe
 npm run dist:linux    # → VisualZPL-*-linux-*.AppImage
 ```
 
@@ -53,9 +53,16 @@ npm run dev           # builds the frontend, then launches the Electron window
 
 | OS | Artifact | How to run |
 | --- | --- | --- |
-| Windows | `VisualZPL-*-win-*.exe` (portable) | double-click the `.exe` |
+| **Windows (recommended)** | `VisualZPL-*-win-x64.zip` | Unzip anywhere → run `VisualZPL.exe`. No installer, no admin, **no `%TEMP%` self-extraction** — the safest option on locked-down / air-gapped (폐쇄망) PCs. |
+| Windows (installer) | `VisualZPL-*-win-x64-setup.exe` | Run the installer (per-user, no admin) → launch from the Start menu. |
+| Windows (portable) | `VisualZPL-*-win-x64-portable.exe` | Double-click. ⚠ Self-extracts to `%TEMP%` before running, so corporate **AppLocker/SRP** policies that forbid executing from temp can silently block it (nothing happens on double-click). Prefer the **zip** in that case. |
 | Linux | `VisualZPL-*-linux-*.AppImage` | `chmod +x` then run |
 | macOS | `VisualZPL-*-mac-*.zip` | unzip → drag `VisualZPL.app`; first launch: right-click → Open (unsigned) |
+
+> **Windows: the builds are unsigned.** If **SmartScreen** shows *"Windows
+> protected your PC"*, click **More info → Run anyway**. If the download itself
+> is blocked/greyed out, right-click the file → **Properties → Unblock** (removes
+> the *Mark of the Web*), then run it.
 
 ## Cross-platform builds & auto-release (CI)
 

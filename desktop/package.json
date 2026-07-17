@@ -1,6 +1,6 @@
 {
   "name": "visualzpl-desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "VisualZPL desktop app (Electron). Bundles the editor UI and an in-process Labelary preview proxy — no Java, no install.",
   "author": "VisualZPL",
