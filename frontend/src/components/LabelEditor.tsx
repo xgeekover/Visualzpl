@@ -48,6 +48,7 @@ import { computeEncodingKey, imageToZpl } from '../ImageToZpl';
 import { extractVariables, type DataRow } from '../BatchZpl';
 import { downloadTextFile } from '../downloadFile';
 import { LABEL_PRESETS, type LabelPreset } from '../LabelPresets';
+import { importZpl } from '../zpl/importZpl';
 import { useLabelPreview } from '../hooks/useLabelPreview';
 import { useBrowserPrint } from '../hooks/useBrowserPrint';
 import { useToastQueue, type Toast } from '../hooks/useToastQueue';
@@ -85,6 +86,29 @@ const INITIAL_DOC: LabelDocument = {
 
 let idCounter = 0;
 const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
+
+/** 계단식 배치 간격/주기 — 새 객체가 기존 객체를 정확히 덮지 않도록 밀어 놓는다. */
+const CASCADE_STEP_MM = 4;
+const CASCADE_CYCLE = 5;
+
+/**
+ * 새 객체의 시작 좌표. 타입별 기본 위치에 기존 객체 수만큼 계단식 오프셋을 더한다.
+ *
+ * 오프셋이 없으면 두 번째 객체가 첫 번째 객체 위에 정확히 겹쳐 놓여 화면에서
+ * 사라진 것처럼 보인다(특히 표/이미지). 라벨 밖으로 나가지 않도록 클램프한다.
+ */
+const cascadeOrigin = (
+  base: { x: number; y: number },
+  count: number,
+  labelWidthMm: number,
+  labelHeightMm: number,
+): { x: number; y: number } => {
+  const offset = (count % CASCADE_CYCLE) * CASCADE_STEP_MM;
+  return {
+    x: Math.max(0, Math.min(base.x + offset, labelWidthMm - 5)),
+    y: Math.max(0, Math.min(base.y + offset, labelHeightMm - 5)),
+  };
+};
 
 /** ZPL rotation code ↔ fabric angle (degrees). */
 const rotationToAngle = (r?: ZplRotation): number =>
@@ -745,6 +769,58 @@ export function LabelEditor() {
     }
   }, [zplCode, showToast]);
 
+  /**
+   * 코드 패널에 붙여넣은 ZPL 을 캔버스 객체로 가져온다.
+   *
+   * 가져오지 못한 명령(박스·이미지 등)은 토스트로 알린다 — 조용히 사라지면
+   * 사용자가 손실을 눈치채지 못한 채 저장하게 되기 때문이다.
+   */
+  const handleImportZplToCanvas = useCallback(() => {
+    const parsed = importZpl(zplCode, doc.dpmm ?? 8);
+
+    if (parsed.objects.length === 0) {
+      showToast(
+        'error',
+        parsed.warnings.length > 0
+          ? `가져올 수 있는 객체가 없습니다 — ${parsed.warnings.join(', ')}는 편집 객체로 표현할 수 없습니다`
+          : '가져올 객체를 찾지 못했습니다',
+      );
+      return;
+    }
+
+    // 편집기의 전역 id 카운터로 다시 매긴다 — 임포터가 자체 번호를 쓰면
+    // 가져온 뒤 새로 추가하는 객체와 id 가 충돌할 수 있다.
+    const idPrefix: Record<LabelObject['type'], string> = {
+      text: 'text',
+      barcode: 'barcode',
+      qrcode: 'qr',
+      image: 'image',
+      table: 'table',
+    };
+    const objects = parsed.objects.map(obj => ({
+      ...obj,
+      id: nextId(idPrefix[obj.type]),
+    })) as LabelObject[];
+
+    setDoc(d => ({
+      ...d,
+      widthMm: parsed.widthMm ?? d.widthMm,
+      heightMm: parsed.heightMm ?? d.heightMm,
+      objects,
+    }));
+    setSelectedId(null);
+    setZplDraft(null); // 이제 캔버스가 진실의 원천 — 다시 생성 모드로 돌아간다.
+
+    if (parsed.warnings.length > 0) {
+      showToast(
+        'error',
+        `${objects.length}개 객체를 가져왔습니다. 제외됨: ${parsed.warnings.join(', ')}`,
+      );
+    } else {
+      showToast('success', `${objects.length}개 객체를 편집기로 가져왔습니다`);
+    }
+  }, [zplCode, doc.dpmm, showToast]);
+
   // ── Zebra Browser Print integration (local desktop agent) ──────────
   const {
     agentStatus,
@@ -1129,13 +1205,16 @@ export function LabelEditor() {
   }, [selectedId]);
 
   // ── 5) Object creation handlers ─────────────────────────────────────
+  /** 타입별 기본 위치 + 기존 객체 수에 따른 계단식 오프셋. */
+  const originFor = (base: { x: number; y: number }) =>
+    cascadeOrigin(base, doc.objects.length, doc.widthMm ?? 100, doc.heightMm ?? 50);
+
   const addText = () => {
     const id = nextId('text');
     const obj: TextObject = {
       id,
       type: 'text',
-      x: 5,
-      y: 5,
+      ...originFor({ x: 5, y: 5 }),
       fontHeight: 4,
       data: 'Sample Text',
     };
@@ -1148,8 +1227,7 @@ export function LabelEditor() {
     const obj: BarcodeObject = {
       id,
       type: 'barcode',
-      x: 5,
-      y: 15,
+      ...originFor({ x: 5, y: 15 }),
       height: 12,
       moduleWidth: 2,
       printInterpretationLine: true,
@@ -1164,8 +1242,7 @@ export function LabelEditor() {
     const obj: QrCodeObject = {
       id,
       type: 'qrcode',
-      x: 65,
-      y: 5,
+      ...originFor({ x: 65, y: 5 }),
       magnification: 4,
       errorCorrection: 'M',
       data: 'https://visualzpl.io',
@@ -1187,8 +1264,7 @@ export function LabelEditor() {
     const obj: TableObject = {
       id,
       type: 'table',
-      x: 5,
-      y: 5,
+      ...cascadeOrigin({ x: 5, y: 5 }, doc.objects.length, labelW, labelH),
       data: `Table ${rows}×${cols}`,
       rowHeightsMm: Array.from({ length: rows }, () => rowHeightMm),
       colWidthsMm: Array.from({ length: cols }, () => colWidthMm),
@@ -1231,8 +1307,12 @@ export function LabelEditor() {
         const obj: ImageObject = {
           id,
           type: 'image',
-          x: 5,
-          y: 5,
+          ...cascadeOrigin(
+            { x: 5, y: 5 },
+            doc.objects.length,
+            labelWidthMm,
+            doc.heightMm ?? 50,
+          ),
           widthMm,
           heightMm,
           sourceDataUrl: dataUrl,
@@ -1572,14 +1652,24 @@ export function LabelEditor() {
             </span>
             <div className="flex items-center gap-1">
               {isManualZpl && (
-                <button
-                  type="button"
-                  onClick={() => setZplDraft(null)}
-                  title="캔버스에서 생성된 ZPL 로 되돌리기 (수동 편집 내용은 사라집니다)"
-                  className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
-                >
-                  재생성으로 되돌리기
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleImportZplToCanvas}
+                    title="붙여넣은 ZPL 을 캔버스 객체로 가져와 마우스로 편집합니다 (박스·이미지 등 일부 명령은 편집 객체로 표현할 수 없어 제외됩니다)"
+                    className="inline-flex items-center gap-1 text-xs text-emerald-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
+                  >
+                    편집기로 가져오기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZplDraft(null)}
+                    title="캔버스에서 생성된 ZPL 로 되돌리기 (수동 편집 내용은 사라집니다)"
+                    className="inline-flex items-center gap-1 text-xs text-amber-300 hover:text-white px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
+                  >
+                    재생성으로 되돌리기
+                  </button>
+                </>
               )}
               <button
                 type="button"

@@ -78,13 +78,43 @@ const toInt = (s: string | undefined, d = 0): number => {
 const asRotation = (c: string | undefined): Rotation =>
   c === 'R' || c === 'I' || c === 'B' ? c : 'N';
 
+/** Upper bound per side so a typo'd ^PW/^LL cannot allocate a runaway canvas. */
+const MAX_CANVAS_DOTS = 16000;
+
+const clampDots = (n: number): number =>
+  Math.max(1, Math.min(MAX_CANVAS_DOTS, Math.round(n)));
+
+/**
+ * Reads the media size the ZPL declares for itself: ^PW (print width) and
+ * ^LL (label length), both in dots. Returns nulls when absent so the caller
+ * can fall back to the editor's configured size.
+ */
+export function readDeclaredSize(zpl: string): {
+  widthDots: number | null;
+  heightDots: number | null;
+} {
+  const read = (cmd: 'PW' | 'LL'): number | null => {
+    // Last occurrence wins — later commands override earlier ones on a printer.
+    const matches = [...zpl.matchAll(new RegExp(`\\^${cmd}\\s*(\\d+)`, 'gi'))];
+    if (matches.length === 0) return null;
+    const value = parseInt(matches[matches.length - 1][1], 10);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
+  return { widthDots: read('PW'), heightDots: read('LL') };
+}
+
 const ANGLE: Record<Rotation, number> = { N: 0, R: 90, I: 180, B: 270 };
 
 /** Render ZPL to an offscreen canvas at native dot resolution. */
 export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanvasElement {
   const dpmm = opts.dpmm || 8;
-  const W = Math.max(1, Math.round((opts.widthMm || 100) * dpmm));
-  const H = Math.max(1, Math.round((opts.heightMm || 50) * dpmm));
+  // The ZPL itself declares its media size via ^PW/^LL (dots). Honour that when
+  // present so pasted external ZPL renders whole instead of being clipped to the
+  // editor's width/height. Generated ZPL emits the same values, so nothing changes
+  // for canvas-authored labels.
+  const declared = readDeclaredSize(zpl);
+  const W = clampDots(declared.widthDots ?? Math.round((opts.widthMm || 100) * dpmm));
+  const H = clampDots(declared.heightDots ?? Math.round((opts.heightMm || 50) * dpmm));
 
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -111,18 +141,24 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
 
   const drawBox = (rest: string) => {
     const p = rest.split(',');
-    const w = toInt(p[0], 1);
-    const h = toInt(p[1], 1);
+    const w = Math.max(toInt(p[0], 1), 1);
+    const h = Math.max(toInt(p[1], 1), 1);
     const t = Math.max(1, toInt(p[2], 1));
+    ctx.fillStyle = '#000000';
+    // A degenerate box (either side no thicker than the border) is how ZPL draws
+    // plain rules/lines — fill it solid.
     if (w <= t || h <= t) {
-      ctx.fillRect(ox, oy, Math.max(w, 1), Math.max(h, 1));
-    } else {
-      ctx.fillStyle = '#000000';
       ctx.fillRect(ox, oy, w, h);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ox + t, oy + t, w - 2 * t, h - 2 * t);
-      ctx.fillStyle = '#000000';
+      return;
     }
+    // Otherwise stroke the four edges and leave the interior untouched. ZPL is
+    // additive — an element only turns dots on, it never erases what sits
+    // beneath it. Painting the interior white would wipe out text/barcodes
+    // placed under a frame, which is a very common label layout.
+    ctx.fillRect(ox, oy, w, t); // top
+    ctx.fillRect(ox, oy + h - t, w, t); // bottom
+    ctx.fillRect(ox, oy, t, h); // left
+    ctx.fillRect(ox + w - t, oy, t, h); // right
   };
 
   // ^GC<diameter>,<thickness>,<color> — circle (filled if thickness fills it).
