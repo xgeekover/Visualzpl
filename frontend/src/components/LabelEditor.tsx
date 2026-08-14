@@ -49,6 +49,7 @@ import { extractVariables, type DataRow } from '../BatchZpl';
 import { downloadTextFile } from '../downloadFile';
 import { LABEL_PRESETS, type LabelPreset } from '../LabelPresets';
 import { importZpl } from '../zpl/importZpl';
+import { useDocHistory } from '../hooks/useDocHistory';
 import { useLabelPreview } from '../hooks/useLabelPreview';
 import { useBrowserPrint } from '../hooks/useBrowserPrint';
 import { useToastQueue, type Toast } from '../hooks/useToastQueue';
@@ -550,6 +551,44 @@ function nodeToModelPatch(
 //  been replaced.)
 // ──────────────────────────────────────────────────────────────────────────
 
+function UndoIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7v6h6" />
+      <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
+    </svg>
+  );
+}
+
+function RedoIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 7v6h-6" />
+      <path d="M21 13a9 9 0 1 1-3-7.7L21 8" />
+    </svg>
+  );
+}
+
 function ClipboardIcon({ size = 14 }: { size?: number }) {
   return (
     <svg
@@ -692,7 +731,9 @@ function ChevronDownIcon({ size = 12 }: { size?: number }) {
 // ──────────────────────────────────────────────────────────────────────────
 
 export function LabelEditor() {
-  const [doc, setDoc] = useState<LabelDocument>(INITIAL_DOC);
+  // 문서 상태 = 실행취소 스택. setDoc 은 useState 와 같은 방식으로 쓰되,
+  // 파생 데이터 갱신은 { record: false }, 연속 입력은 { coalesceKey } 를 준다.
+  const { doc, setDoc, undo, redo, canUndo, canRedo } = useDocHistory(INITIAL_DOC);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cellSelection, setCellSelection] = useState<CellSelection>({ kind: 'none' });
 
@@ -1098,7 +1139,8 @@ export function LabelEditor() {
                   : o,
               ),
             };
-          });
+            // 사용자 동작이 아니라 코드가 채우는 파생 캐시 → 되돌림 지점 없음.
+          }, { record: false });
         })
         .catch(err => {
           // eslint-disable-next-line no-console
@@ -1172,7 +1214,8 @@ export function LabelEditor() {
                   }),
                 };
               }),
-            }));
+              // 파생 캐시 → 되돌림 지점 없음.
+            }), { record: false });
           })
           .catch(err => {
             // eslint-disable-next-line no-console
@@ -1332,14 +1375,19 @@ export function LabelEditor() {
   // ── 6) Update / delete a single object via the property panel ───────
   const updateObject = useCallback(
     (id: string, patch: Partial<LabelObject>) => {
-      setDoc(d => ({
-        ...d,
-        objects: d.objects.map(o =>
-          o.id === id ? ({ ...o, ...patch } as LabelObject) : o,
-        ),
-      }));
+      setDoc(
+        d => ({
+          ...d,
+          objects: d.objects.map(o =>
+            o.id === id ? ({ ...o, ...patch } as LabelObject) : o,
+          ),
+        }),
+        // 속성 패널의 연속 입력(글자 단위 타이핑, 숫자 스피너)을 하나의 되돌림
+        // 지점으로 묶는다. 객체가 바뀌면 키가 달라져 자동으로 분리된다.
+        { coalesceKey: `update:${id}` },
+      );
     },
-    [],
+    [setDoc],
   );
 
   const deleteObject = (id: string) => {
@@ -1369,10 +1417,43 @@ export function LabelEditor() {
         return;
       }
     }
-    setDoc(d => ({ ...d, ...patch }));
+    // 숫자 입력을 연달아 조정해도 되돌림 지점이 하나로 묶이게 한다.
+    setDoc(d => ({ ...d, ...patch }), { coalesceKey: 'label-size' });
   };
 
   const selected = doc.objects.find(o => o.id === selectedId) ?? null;
+
+  // 실행취소로 선택 중이던 객체가 사라졌으면 선택을 푼다(삭제 되돌리기 등).
+  useEffect(() => {
+    if (selectedId && !doc.objects.some(o => o.id === selectedId)) {
+      setSelectedId(null);
+      setCellSelection({ kind: 'none' });
+    }
+  }, [doc.objects, selectedId]);
+
+  // ── 키보드 단축키: ⌘/Ctrl+Z 실행취소, ⌘/Ctrl+Shift+Z · Ctrl+Y 다시실행 ──
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      // 입력 요소 안에서는 브라우저의 텍스트 실행취소를 방해하지 않는다.
+      // (ZPL 코드 패널·속성 입력에서 ⌘Z 는 글자 단위로 동작해야 한다.)
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -1413,6 +1494,29 @@ export function LabelEditor() {
       {/* ── Top Control Bar: client-side export actions ────────────── */}
       <div className="px-6 py-2.5 bg-white border-b border-slate-200 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 mr-1">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              aria-label="실행취소"
+              title="실행취소 (⌘Z / Ctrl+Z)"
+              className="btn-secondary px-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <UndoIcon />
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              aria-label="다시실행"
+              title="다시실행 (⇧⌘Z / Ctrl+Y)"
+              className="btn-secondary px-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RedoIcon />
+            </button>
+          </div>
+          <span className="h-5 w-px bg-slate-200" aria-hidden="true" />
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-1">
             Export
           </span>
