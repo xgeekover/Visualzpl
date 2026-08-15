@@ -17,6 +17,7 @@
  * Unknown commands are skipped so a label still renders.
  */
 import { toCanvas as bwipToCanvas } from 'bwip-js/browser';
+import { decodeGfa } from './gfa';
 
 export interface RenderZplOptions {
   widthMm: number;
@@ -223,26 +224,24 @@ export function renderZplToCanvas(zpl: string, opts: RenderZplOptions): HTMLCanv
   };
 
   const drawGfa = (rest: string) => {
-    // ^GFA,<total>,<total>,<bytesPerRow>,<hex>
-    const parts = rest.split(',');
-    const bpr = toInt(parts[3], 0);
-    const hex = parts.slice(4).join(',').replace(/[^0-9A-Fa-f]/g, '');
-    if (bpr <= 0 || hex.length < 2) return;
-    const rows = Math.floor(hex.length / 2 / bpr);
-    if (rows <= 0) return;
-    const wpx = bpr * 8;
+    // ^GFA,<total>,<total>,<bytesPerRow>,<data>
+    // 데이터는 압축 표기(G–Z/g–z 반복, ',' '!' ':')를 포함할 수 있으므로
+    // 공용 디코더에 맡긴다 — 예전처럼 hex 만 남기고 버리면 비트맵이 어긋난다.
+    const decoded = decodeGfa(rest);
+    if (!decoded) return;
+    const { bytes, bytesPerRow, widthDots, heightDots } = decoded;
     const tmp = document.createElement('canvas');
-    tmp.width = wpx;
-    tmp.height = rows;
+    tmp.width = widthDots;
+    tmp.height = heightDots;
     const tctx = tmp.getContext('2d');
     if (!tctx) return;
-    const img = tctx.createImageData(wpx, rows);
-    for (let r = 0; r < rows; r++) {
-      for (let b = 0; b < bpr; b++) {
-        const byte = parseInt(hex.substr((r * bpr + b) * 2, 2), 16) || 0;
+    const img = tctx.createImageData(widthDots, heightDots);
+    for (let r = 0; r < heightDots; r++) {
+      for (let b = 0; b < bytesPerRow; b++) {
+        const byte = bytes[r * bytesPerRow + b];
         for (let bit = 0; bit < 8; bit++) {
           const on = (byte >> (7 - bit)) & 1; // 1 = black dot
-          const idx = (r * wpx + (b * 8 + bit)) * 4;
+          const idx = (r * widthDots + (b * 8 + bit)) * 4;
           const v = on ? 0 : 255;
           img.data[idx] = v;
           img.data[idx + 1] = v;

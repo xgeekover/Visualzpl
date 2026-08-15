@@ -66,11 +66,11 @@ describe('importZpl — 붙여넣은 ZPL 을 편집 객체로 되돌린다', () 
 
   it('표현할 수 없는 명령은 조용히 버리지 않고 경고로 보고한다', () => {
     const { objects, warnings } = importZpl(
-      '^XA^FO40,40^GFA,100,100,10,ABCD^FS^FO10,10^GE100,100,2,B^FS^XZ',
+      '^XA^FO10,10^GE100,100,2,B^FS^FO20,20^GFB,10,10,2,XX^FS^XZ',
     );
     expect(objects).toHaveLength(0);
-    expect(warnings.join(' ')).toContain('^GFA');
     expect(warnings.join(' ')).toContain('^GE');
+    expect(warnings.join(' ')).toContain('^GFB');
   });
 
   it('Code128 이외 바코드는 경고하고 객체를 만들지 않는다', () => {
@@ -136,6 +136,50 @@ describe('importZpl — 붙여넣은 ZPL 을 편집 객체로 되돌린다', () 
     // 기본 폰트 폴백이 'none' 과 'skip' 을 구분하지 못하면 바코드가 텍스트가 된다.
     const { objects } = importZpl('^XA^CF0,30^FO40,40^B3N,N,80,Y,N^FDABC^FS^XZ');
     expect(objects).toHaveLength(0);
+  });
+
+  // ── 로고 이미지(^GFA) 가져오기 ────────────────────────────────────────
+  it('^GFA 를 이미지 객체로 가져온다 (크기·위치 포함)', () => {
+    // 2바이트/행 × 8행 = 16x8 dot
+    const hex = 'FF00'.repeat(8);
+    const { objects, warnings } = importZpl(`^XA^FO80,160^GFA,16,16,2,${hex}^FS^XZ`);
+    expect(objects).toHaveLength(1);
+    expect(objects[0]).toMatchObject({
+      type: 'image',
+      x: 10,
+      y: 20,
+      widthMm: 2, // 16 dot / 8dpmm
+      heightMm: 1, // 8 dot / 8dpmm
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it('가져온 이미지는 화면 표시용 PNG 를 갖는다', () => {
+    const hex = 'FF00'.repeat(8);
+    const { objects } = importZpl(`^XA^FO0,0^GFA,16,16,2,${hex}^FS^XZ`);
+    const img = objects[0] as { sourceDataUrl: string };
+    expect(img.sourceDataUrl.startsWith('data:image/png;base64,')).toBe(true);
+  });
+
+  it('이미지는 원본 ^GFA 를 그대로 다시 내보낸다 (재인코딩 손실 없음)', () => {
+    const hex = 'FF00'.repeat(8);
+    const { objects } = importZpl(`^XA^FO0,0^GFA,16,16,2,${hex}^FS^XZ`);
+    const encoded = (objects[0] as { encoded?: { hexData: string; bytesPerRow: number } }).encoded;
+    expect(encoded?.hexData).toBe(hex);
+    expect(encoded?.bytesPerRow).toBe(2);
+  });
+
+  it('압축된 ^GFA 도 가져온다 (반복 문자·줄 종결자)', () => {
+    // 'I'=3회 반복. 행당 2바이트(4니블): IF0 → FFF0 = 한 행
+    const { objects } = importZpl('^XA^FO0,0^GFA,4,4,2,IF0,IF0,^FS^XZ');
+    const encoded = (objects[0] as { encoded?: { hexData: string } }).encoded;
+    expect(encoded?.hexData).toBe('FFF0FFF0');
+  });
+
+  it('해석할 수 없는 ^GFA 는 경고만 남기고 넘어간다', () => {
+    const { objects, warnings } = importZpl('^XA^FO0,0^GFA,쓰레기^FS^XZ');
+    expect(objects).toHaveLength(0);
+    expect(warnings.join(' ')).toContain('^GFA');
   });
 
   it('실무 라벨(박스 + ^CF 텍스트 + 바코드)이 통째로 들어온다', () => {

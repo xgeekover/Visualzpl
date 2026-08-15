@@ -15,12 +15,15 @@
 import type {
   BarcodeObject,
   BoxObject,
+  ImageObject,
   LabelObject,
   QrCodeObject,
   QrErrorCorrection,
   TextObject,
   ZplRotation,
 } from '../types';
+import { computeEncodingKey } from '../ImageToZpl';
+import { bitmapToPngDataUrl, decodeGfa } from './gfa';
 import { readDeclaredSize } from './renderZpl';
 
 export interface ImportZplResult {
@@ -39,9 +42,10 @@ const UNSUPPORTED_COMMANDS: Record<string, string> = {
   GC: '원(^GC)',
   GD: '대각선(^GD)',
   GE: '타원(^GE)',
-  GFA: '이미지(^GFA)',
-  GFB: '이미지(^GFB)',
-  GFC: '이미지(^GFC)',
+  // ^GFB/^GFC 는 바이너리·압축 바이너리 포맷이라 ASCII hex 인 ^GFA 와 달리
+  // 텍스트로 붙여넣는 경로에서 온전히 복원할 수 없다.
+  GFB: '바이너리 이미지(^GFB)',
+  GFC: '바이너리 이미지(^GFC)',
 };
 
 /** ^A/^CF 가 하나도 없을 때 쓰는 글자 높이(dot). 프린터 기본 폰트에 준한다. */
@@ -64,6 +68,15 @@ const asRotation = (c: string | undefined): ZplRotation =>
 /** dot → mm. 소수점 3자리에서 반올림해 부동소수 잡음을 없앤다. */
 const toMm = (dots: number, dpmm: number): number =>
   Math.round((dots / dpmm) * 1000) / 1000;
+
+/** 비트맵 바이트 → 대문자 ASCII hex(^GFA 재출력용, 압축 없음). */
+const hexFromBytes = (bytes: Uint8Array): string => {
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i].toString(16).padStart(2, '0').toUpperCase();
+  }
+  return out;
+};
 
 interface TextStyle {
   rot: ZplRotation;
@@ -170,6 +183,46 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
     }
   };
 
+  /**
+   * ^GFA,<총바이트>,<총바이트>,<행당바이트>,<hex> → 이미지 객체.
+   *
+   * 비트맵을 PNG DataURL 로 되살려 캔버스에 보여주고, 동시에 원본 hex 를
+   * `encoded` 에 그대로 담아 다시 내보낼 때 **같은 ^GFA 가 나오게** 한다
+   * (재인코딩으로 인한 미세한 화질 저하가 없다). 크기를 바꾸면 그때
+   * PNG 로부터 다시 인코딩된다.
+   */
+  const commitGfa = (rest: string): void => {
+    const decoded = decodeGfa(rest);
+    if (!decoded) {
+      warningSet.add('이미지(^GFA — 데이터를 해석할 수 없음)');
+      return;
+    }
+    const widthMm = toMm(decoded.widthDots, dpmm);
+    const heightMm = toMm(decoded.heightDots, dpmm);
+    const sourceDataUrl = bitmapToPngDataUrl(decoded);
+    const totalBytes = decoded.bytesPerRow * decoded.heightDots;
+    const obj: ImageObject = {
+      id: nextId('image'),
+      type: 'image',
+      x: toMm(ox, dpmm),
+      y: toMm(oy, dpmm),
+      widthMm,
+      heightMm,
+      sourceDataUrl,
+      threshold: 128,
+      encoded: {
+        key: computeEncodingKey({ sourceDataUrl, widthMm, heightMm, threshold: 128, dpmm }),
+        hexData: hexFromBytes(decoded.bytes),
+        bytesPerRow: decoded.bytesPerRow,
+        totalBytes,
+        widthDots: decoded.widthDots,
+        heightDots: decoded.heightDots,
+      },
+      data: `가져온 이미지 ${decoded.widthDots}×${decoded.heightDots}`,
+    };
+    objects.push(obj);
+  };
+
   /** ^GB<w>,<h>,<t>,<color>,<rounding> → 박스/선 객체. */
   const commitBox = (rest: string): void => {
     const p = rest.split(',');
@@ -222,6 +275,11 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
 
     if (up2 === 'GB') {
       commitBox(raw.slice(2));
+      continue;
+    }
+
+    if (up3 === 'GFA') {
+      commitGfa(raw.slice(3).replace(/^,/, ''));
       continue;
     }
 
