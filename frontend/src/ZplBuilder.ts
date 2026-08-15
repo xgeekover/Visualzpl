@@ -22,6 +22,7 @@ import {
   BarcodeObject,
   CELL_DEFAULTS,
   DEFAULT_DPMM,
+  BoxObject,
   ImageObject,
   LabelDocument,
   LabelObject,
@@ -94,7 +95,27 @@ export class ZplBuilder {
         return this.renderImage(obj);
       case 'table':
         return this.renderTable(obj);
+      case 'box':
+        return this.renderBox(obj);
     }
+  }
+
+  /**
+   * 박스/선 객체 → ^FO ... ^GB ... ^FS
+   *
+   * 예) 100x50mm 박스, 두께 3dot:
+   *   ^FO40,40^GB800,400,3,B,0^FS
+   *
+   * 두께가 폭이나 높이 이상이면 프린터가 꽉 찬 막대로 그린다 — 가로/세로 직선은
+   * 높이(또는 폭)를 0 에 가깝게 두는 방식으로 같은 명령에서 표현된다.
+   */
+  private renderBox(obj: BoxObject): string {
+    const x = this.toDot(obj.x);
+    const y = this.toDot(obj.y);
+    const w = Math.max(1, this.toDot(obj.widthMm));
+    const h = Math.max(1, this.toDot(obj.heightMm));
+    const t = Math.max(1, Math.round(obj.thicknessDots ?? 2));
+    return [`^FO${x},${y}`, `^GB${w},${h},${t},B,0`, '^FS'].join('');
   }
 
   /**

@@ -14,6 +14,7 @@
 
 import type {
   BarcodeObject,
+  BoxObject,
   LabelObject,
   QrCodeObject,
   QrErrorCorrection,
@@ -35,15 +36,16 @@ export interface ImportZplResult {
 
 /** 편집 모델에 대응하는 객체가 없어 가져올 수 없는 명령 → 사용자 안내 문구. */
 const UNSUPPORTED_COMMANDS: Record<string, string> = {
-  GB: '박스/선(^GB)',
   GC: '원(^GC)',
   GD: '대각선(^GD)',
   GE: '타원(^GE)',
   GFA: '이미지(^GFA)',
   GFB: '이미지(^GFB)',
   GFC: '이미지(^GFC)',
-  FB: '텍스트 블록 줄바꿈(^FB)',
 };
+
+/** ^A/^CF 가 하나도 없을 때 쓰는 글자 높이(dot). 프린터 기본 폰트에 준한다. */
+const DEFAULT_FONT_HEIGHT_DOTS = 30;
 
 /** 지원하는 바코드: 현재 모델은 Code128(^BC)만 표현할 수 있다. */
 const IMPORTABLE_BARCODE = 'BC';
@@ -63,9 +65,23 @@ const asRotation = (c: string | undefined): ZplRotation =>
 const toMm = (dots: number, dpmm: number): number =>
   Math.round((dots / dpmm) * 1000) / 1000;
 
+interface TextStyle {
+  rot: ZplRotation;
+  heightDots: number;
+  widthDots: number;
+  font: string;
+}
+
 type Pending =
+  /** 필드 종류가 아직 선언되지 않음 → ^FD 가 오면 기본 폰트 텍스트로 본다. */
   | { kind: 'none' }
-  | { kind: 'text'; rot: ZplRotation; heightDots: number; widthDots: number; font: string }
+  /**
+   * 종류는 선언됐지만 편집 모델로 표현할 수 없음(Code128 외 바코드 등).
+   * 'none' 과 반드시 구분해야 한다 — 그러지 않으면 기본 폰트 폴백이 끼어들어
+   * 바코드가 텍스트로 둔갑한다.
+   */
+  | { kind: 'skip' }
+  | ({ kind: 'text' } & TextStyle)
   | { kind: 'barcode'; rot: ZplRotation; heightDots: number; line: boolean; above: boolean }
   | { kind: 'qrcode'; rot: ZplRotation; model: 1 | 2; magnification: number; ec: QrErrorCorrection };
 
@@ -84,23 +100,36 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
   let byModule = 2;
   let pending: Pending = { kind: 'none' };
   let seq = 0;
+  // ^CF 로 지정하는 기본 폰트. 필드마다 ^A 를 쓰지 않는 ZPL 이 매우 흔하므로,
+  // ^A 가 없으면 이 값(그것도 없으면 프린터 기본값)으로 텍스트를 만든다.
+  // 이것이 없으면 ^CF 만 쓰는 라벨의 모든 텍스트가 통째로 사라진다.
+  let defaultFont: TextStyle = {
+    rot: 'N',
+    heightDots: DEFAULT_FONT_HEIGHT_DOTS,
+    widthDots: 0,
+    font: '0',
+  };
 
   const nextId = (prefix: string): string => `${prefix}-${++seq}`;
 
   const commit = (data: string): void => {
-    switch (pending.kind) {
+    // ^A 없이 ^FD 만 있는 필드는 ^CF(또는 프린터 기본) 폰트를 쓰는 텍스트다.
+    const effective: Pending =
+      pending.kind === 'none' ? { kind: 'text', ...defaultFont } : pending;
+
+    switch (effective.kind) {
       case 'text': {
         const obj: TextObject = {
           id: nextId('text'),
           type: 'text',
           x: toMm(ox, dpmm),
           y: toMm(oy, dpmm),
-          fontHeight: toMm(pending.heightDots, dpmm),
+          fontHeight: toMm(effective.heightDots, dpmm),
           data,
         };
-        if (pending.rot !== 'N') obj.rotation = pending.rot;
-        if (pending.widthDots > 0) obj.fontWidth = toMm(pending.widthDots, dpmm);
-        if (pending.font !== '0') obj.font = pending.font;
+        if (effective.rot !== 'N') obj.rotation = effective.rot;
+        if (effective.widthDots > 0) obj.fontWidth = toMm(effective.widthDots, dpmm);
+        if (effective.font !== '0') obj.font = effective.font;
         objects.push(obj);
         break;
       }
@@ -110,13 +139,13 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
           type: 'barcode',
           x: toMm(ox, dpmm),
           y: toMm(oy, dpmm),
-          height: toMm(pending.heightDots, dpmm),
+          height: toMm(effective.heightDots, dpmm),
           moduleWidth: byModule,
-          printInterpretationLine: pending.line,
-          printAboveCode: pending.above,
+          printInterpretationLine: effective.line,
+          printAboveCode: effective.above,
           data,
         };
-        if (pending.rot !== 'N') obj.rotation = pending.rot;
+        if (effective.rot !== 'N') obj.rotation = effective.rot;
         objects.push(obj);
         break;
       }
@@ -127,18 +156,38 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
           type: 'qrcode',
           x: toMm(ox, dpmm),
           y: toMm(oy, dpmm),
-          magnification: pending.magnification,
-          errorCorrection: pending.ec,
-          model: pending.model,
+          magnification: effective.magnification,
+          errorCorrection: effective.ec,
+          model: effective.model,
           data: data.replace(/^[LMQH][A-Za-z0-9],/, ''),
         };
-        if (pending.rot !== 'N') obj.rotation = pending.rot;
+        if (effective.rot !== 'N') obj.rotation = effective.rot;
         objects.push(obj);
         break;
       }
       default:
         break;
     }
+  };
+
+  /** ^GB<w>,<h>,<t>,<color>,<rounding> → 박스/선 객체. */
+  const commitBox = (rest: string): void => {
+    const p = rest.split(',');
+    const widthDots = toInt(p[0], 0);
+    const heightDots = toInt(p[1], 0);
+    const thickness = Math.max(1, toInt(p[2], 1));
+    // ZPL 은 폭/높이가 두께보다 작으면 두께로 채운다 — 가로/세로 직선이 이 형태다.
+    const obj: BoxObject = {
+      id: nextId('box'),
+      type: 'box',
+      x: toMm(ox, dpmm),
+      y: toMm(oy, dpmm),
+      widthMm: toMm(Math.max(widthDots, thickness), dpmm),
+      heightMm: toMm(Math.max(heightDots, thickness), dpmm),
+      thicknessDots: thickness,
+      data: '',
+    };
+    objects.push(obj);
   };
 
   for (const raw of zpl.split('^')) {
@@ -168,6 +217,32 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
 
     if (up2 === 'FD') {
       commit(raw.slice(2));
+      continue;
+    }
+
+    if (up2 === 'GB') {
+      commitBox(raw.slice(2));
+      continue;
+    }
+
+    if (up2 === 'CF') {
+      // ^CF<font>,<height>,<width> — 이후 필드의 기본 폰트를 바꾼다.
+      const body = raw.slice(2);
+      const p = body.split(',');
+      const font = (p[0] ?? '').trim();
+      defaultFont = {
+        rot: 'N',
+        heightDots: toInt(p[1], defaultFont.heightDots) || defaultFont.heightDots,
+        widthDots: toInt(p[2], 0),
+        font: font || defaultFont.font,
+      };
+      continue;
+    }
+
+    if (up2 === 'FB') {
+      // 텍스트 블록. 모델에 줄바꿈 폭 개념이 없어 한 줄로 들어오지만,
+      // 텍스트 자체는 살린다(예전엔 여기서 경고만 남기고 넘어갔다).
+      warningSet.add('^FB 자동 줄바꿈(텍스트는 가져오되 줄바꿈 폭은 유지되지 않음)');
       continue;
     }
 
@@ -203,7 +278,8 @@ export function importZpl(zpl: string, dpmm = 8): ImportZplResult {
 
     if (OTHER_BARCODES.includes(up2)) {
       warningSet.add(`Code128 이외 바코드(^${up2})`);
-      pending = { kind: 'none' };
+      // 'none' 이 아니라 'skip' — 뒤따르는 ^FD 가 텍스트로 잘못 들어오면 안 된다.
+      pending = { kind: 'skip' };
       continue;
     }
 

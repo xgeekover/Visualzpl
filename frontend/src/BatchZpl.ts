@@ -165,7 +165,8 @@ export function validateBatchData(
   // Step 1 — classify every variable by the object types that consume it.
   const consumersByVariable = new Map<string, Set<ConsumerType>>();
   for (const obj of doc.objects) {
-    if (obj.type === 'image' || obj.type === 'table') continue;
+    // 박스는 data 가 없는 순수 도형이라 배치 변수의 소비자가 될 수 없다.
+    if (obj.type === 'image' || obj.type === 'table' || obj.type === 'box') continue;
     const pattern = new RegExp(VARIABLE_PATTERN.source, 'g');
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(obj.data)) !== null) {

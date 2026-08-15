@@ -26,7 +26,7 @@ interface BaseLabelObject {
   /** 도면 내 고유 식별자 (편집기에서 사용) */
   id: string;
   /** 객체 타입 디스크리미네이터 */
-  type: 'text' | 'barcode' | 'qrcode' | 'image' | 'table';
+  type: 'text' | 'barcode' | 'qrcode' | 'image' | 'table' | 'box';
   /** 좌상단 X 좌표 (LabelDocument.unit 단위) */
   x: number;
   /** 좌상단 Y 좌표 (LabelDocument.unit 단위) */
@@ -70,6 +70,23 @@ export interface QrCodeObject extends BaseLabelObject {
   errorCorrection?: QrErrorCorrection;
   /** QR 모델 (1 = 구버전, 2 = 표준). 기본 2 */
   model?: 1 | 2;
+}
+
+/**
+ * 사각형 박스 / 직선 객체 — ZPL `^GB`(Graphic Box).
+ *
+ * 실무 라벨은 테두리·구분선이 뼈대라 붙여넣은 ZPL 을 가져올 때도 이 객체가
+ * 있어야 원본 레이아웃이 살아난다. 두께가 폭이나 높이 이상이면 ZPL 은 이를
+ * 꽉 찬 막대로 그리므로, 직선도 같은 객체로 표현한다(높이 0인 가로선 등).
+ */
+export interface BoxObject extends BaseLabelObject {
+  type: 'box';
+  /** 박스 너비 (LabelDocument.unit 단위) */
+  widthMm: number;
+  /** 박스 높이 (LabelDocument.unit 단위) */
+  heightMm: number;
+  /** 선 두께. dot 단위. 기본 2 */
+  thicknessDots?: number;
 }
 
 /** Precomputed ZPL Graphic Field payload, cached on an ImageObject. */
@@ -158,7 +175,8 @@ export type LabelObject =
   | BarcodeObject
   | QrCodeObject
   | ImageObject
-  | TableObject;
+  | TableObject
+  | BoxObject;
 
 /** 한 장의 라벨 문서를 표현하는 최상위 타입 */
 export interface LabelDocument {

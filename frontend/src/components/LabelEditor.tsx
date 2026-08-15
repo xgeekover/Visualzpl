@@ -35,6 +35,7 @@ import * as fabric from 'fabric';
 
 import type {
   BarcodeObject,
+  BoxObject,
   ImageObject,
   LabelDocument,
   LabelObject,
@@ -175,6 +176,8 @@ function estimateObjectBoundsMm(
       const h = obj.rowHeightsMm.reduce((a, b) => a + b, 0);
       return { width: w, height: h };
     }
+    case 'box':
+      return { width: obj.widthMm, height: obj.heightMm };
   }
 }
 
@@ -399,7 +402,36 @@ function createFabricNode(obj: LabelObject): LabelNode {
       );
     case 'table':
       return createTableNode(obj) as LabelNode;
+    case 'box':
+      return createBoxNode(obj);
   }
+}
+
+/**
+ * 박스/선(^GB) 노드. 두께가 폭이나 높이 이상이면 프린터가 꽉 찬 막대로 그리므로
+ * 캔버스에서도 채워진 사각형으로 보여준다 — 그 외에는 테두리만 그린다.
+ */
+function createBoxNode(obj: BoxObject): LabelNode {
+  const widthPx = Math.max(1, obj.widthMm * PX_PER_MM);
+  const heightPx = Math.max(1, obj.heightMm * PX_PER_MM);
+  const thicknessPx = Math.max(1, ((obj.thicknessDots ?? 2) / 8) * PX_PER_MM);
+  const solid = thicknessPx >= widthPx || thicknessPx >= heightPx;
+
+  return new fabric.Rect({
+    left: obj.x * PX_PER_MM,
+    top: obj.y * PX_PER_MM,
+    width: widthPx,
+    height: heightPx,
+    fill: solid ? '#0f172a' : 'transparent',
+    stroke: solid ? undefined : '#0f172a',
+    strokeWidth: solid ? 0 : thicknessPx,
+    // 테두리가 폭 계산에 섞여 드래그 좌표가 어긋나는 것을 막는다.
+    strokeUniform: true,
+    angle: rotationToAngle(obj.rotation),
+    originX: 'left',
+    originY: 'top',
+    objectCaching: false,
+  }) as LabelNode;
 }
 
 /**
@@ -542,6 +574,15 @@ function nodeToModelPatch(
       heightMm: newHeightMm,
     };
   }
+  if (prev.type === 'box') {
+    // 박스는 크기 자체가 모델 값이므로 스케일을 mm 로 흡수한다
+    // (노드에는 scale 이 남지 않게 다음 렌더에서 새로 만들어진다).
+    return {
+      ...(base as BoxObject),
+      widthMm: Math.max(0.1, ((node.width ?? 1) * scaleX) / PX_PER_MM),
+      heightMm: Math.max(0.1, ((node.height ?? 1) * scaleY) / PX_PER_MM),
+    };
+  }
   return base;
 }
 
@@ -550,6 +591,24 @@ function nodeToModelPatch(
 // (Toast queue lives in ../hooks/useToastQueue; the old useFlashStatus has
 //  been replaced.)
 // ──────────────────────────────────────────────────────────────────────────
+
+function BoxIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="1" />
+    </svg>
+  );
+}
 
 function UndoIcon({ size = 14 }: { size?: number }) {
   return (
@@ -837,6 +896,7 @@ export function LabelEditor() {
       qrcode: 'qr',
       image: 'image',
       table: 'table',
+      box: 'box',
     };
     const objects = parsed.objects.map(obj => ({
       ...obj,
@@ -1294,6 +1354,23 @@ export function LabelEditor() {
     setSelectedId(id);
   };
 
+  const addBox = () => {
+    const id = nextId('box');
+    const labelW = doc.widthMm ?? 100;
+    const labelH = doc.heightMm ?? 50;
+    const obj: BoxObject = {
+      id,
+      type: 'box',
+      ...originFor({ x: 5, y: 5 }),
+      widthMm: Math.max(10, labelW * 0.4),
+      heightMm: Math.max(5, labelH * 0.3),
+      thicknessDots: 2,
+      data: '',
+    };
+    setDoc(d => ({ ...d, objects: [...d.objects, obj] }));
+    setSelectedId(id);
+  };
+
   // ── Table insertion modal ───────────────────────────────────────────
   const handleAddTableClick = () => setIsNewTableOpen(true);
 
@@ -1611,6 +1688,11 @@ export function LabelEditor() {
             onClick={handleAddTableClick}
             icon={<TableIcon size={16} />}
             label="Add Table"
+          />
+          <ToolButton
+            onClick={addBox}
+            icon={<BoxIcon size={16} />}
+            label="Add Box / Line"
           />
 
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-1">
@@ -2017,13 +2099,45 @@ function PropertyForm({
 
       {object.type === 'image' ? (
         <ReadOnlyField label="Filename" value={object.data} />
-      ) : (
+      ) : object.type === 'box' ? null : ( // 박스는 인쇄할 데이터가 없는 순수 도형
         <TextField
           label="Data"
           value={object.data}
           multiline
           onChange={v => onChange({ data: v })}
         />
+      )}
+
+      {object.type === 'box' && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField
+              label="Width (mm)"
+              value={object.widthMm}
+              step={0.5}
+              min={0.1}
+              onChange={v => onChange({ widthMm: v } as Partial<BoxObject>)}
+            />
+            <NumberField
+              label="Height (mm)"
+              value={object.heightMm}
+              step={0.5}
+              min={0.1}
+              onChange={v => onChange({ heightMm: v } as Partial<BoxObject>)}
+            />
+          </div>
+          <NumberField
+            label="Thickness (dot)"
+            value={object.thicknessDots ?? 2}
+            step={1}
+            min={1}
+            onChange={v => onChange({ thicknessDots: v } as Partial<BoxObject>)}
+          />
+          <p className="text-xs leading-relaxed text-slate-400">
+            두께가 폭이나 높이보다 크면 꽉 찬 막대로 인쇄됩니다 — 가로/세로 직선은
+            한쪽을 얇게 두세요.
+          </p>
+        </>
       )}
 
       {object.type === 'text' && (
